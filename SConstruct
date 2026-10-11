@@ -1,5 +1,6 @@
 import os
 import sys
+import json
 from pathlib import Path
 from SCons.Variables import BoolVariable
 
@@ -7,7 +8,12 @@ def scons_path(path):
     return Path(path).as_posix()
 
 
-api_version = ARGUMENTS.get("api_version", "4.7")
+project_config_path = Path("meowody-project.json")
+project_config = json.loads(project_config_path.read_text(encoding="utf-8")) if project_config_path.exists() else {}
+project_dir = project_config.get("project_dir", "meow")
+api_version = ARGUMENTS.get("api_version", project_config.get("api_version", "4.7"))
+if "api_version" not in ARGUMENTS and "custom_api_file" not in ARGUMENTS and project_config.get("custom_api_file"):
+    ARGUMENTS["custom_api_file"] = project_config["custom_api_file"]
 ARGUMENTS.setdefault(
     "use_hot_reload",
     "no" if ARGUMENTS.get("target", "template_debug") == "template_release" else "yes",
@@ -130,7 +136,7 @@ if not is_release and env["platform"] == "windows":
     env.Append(LIBS=["dbghelp"])
 
 # The editor publishes this library only after SCons has exited successfully.
-output_dir = os.environ.get("MEOWODY_BINDING_OUTPUT", "meow/.godot/binding-build") if os.environ.get("MEOWODY_BINDING_BUILD") == "1" else "meow/bin"
+output_dir = os.environ.get("MEOWODY_BINDING_OUTPUT", project_dir + "/.godot/binding-build") if os.environ.get("MEOWODY_BINDING_BUILD") == "1" else project_dir + "/bin"
 target_path = output_dir + "/libmeowody.%s.%s.%s" % (
     env["platform"],
     env["target"],

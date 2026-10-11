@@ -7,6 +7,7 @@ Meowody 是 Godot 4.7 的 C++20 GDExtension 框架。它把常用运行服务、
 ## 目录
 
 - [快速上手](#quickstart)
+- [项目创建器](#project-creator)
 - [项目结构、资源路径与命名](#layout)
 - [App 与生命周期](#app)
 - [构建选项和热重载](#build-options)
@@ -92,6 +93,15 @@ public:
 `GDPROPERTY int score = 2;` 自动生成缺失的 get_score / set_score 声明、实现和 Godot 绑定，无需在类头文件中重复声明。自动 setter 只赋值；需要校验、资源通知或信号重连时，可以提供业务 setter 并让生成器复用它。具体规则见[反射章节](#reflection)。
 
 下面的代码块有两类：独立示例带完整初始化；API 片段复用前文的变量。PlayerSave、SettingsSystem、TestPanelView 等是教程中的业务类型，需要按场景生成或定义；URL、音频路径和资源包路径需替换成你的真实资源。14 个原生控件的逐项示例在[节点示例章节](#node-examples)。
+
+<a id="project-creator"></a>
+## 项目创建器
+
+Windows 桌面创建器从本框架的 Git 远程仓库指定版本生成独立工程，新工程使用 `project/` 作为 Godot 目录，包含完整框架服务、原生节点、编辑器插件、反射工具、MCP 源码及空白场景，不携带当前游戏或业务测试类。
+
+源码启动：`python tools/project_creator/app.py`。打包 EXE：`./tools/project_creator/build.ps1`；输出在 `build/project-creator/dist/MeowodyProjectCreator.exe`。创建时支持下载官方 Godot 稳定版或选择本地引擎，并完成固定 godot-cpp 依赖准备、Debug 编译和加载验证。详情见 [创建器说明](tools/project_creator/README.md)。首次使用前需推送 `framework-dependencies.json` 和支持版本配置的 SConstruct；旧 ref 缺少固定依赖记录会停止创建。
+
+`framework-dependencies.json` 固定官方 godot-cpp 提交；新项目的 `meowody-project.json` 保存 Godot/API 版本及 `project_dir`。普通构建与编辑器热重载共用这些配置，显式命令行 API 参数优先。未配置该文件时，本仓库仍按原有 `meow/` 和 4.7 默认配置构建。
 
 <a id="layout"></a>
 ## 项目结构、资源路径与命名

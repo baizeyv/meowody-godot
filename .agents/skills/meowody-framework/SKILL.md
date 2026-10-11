@@ -5,7 +5,7 @@ description: Develop, fix, review, or document the Meowody Godot 4.7 C++ GDExten
 
 # Meowody framework development
 
-Locate the requested repository using SConstruct, src/runtime/app.h and meow/project.godot. Root README.md is the single handbook. Read relevant chapters and actual headers before editing; a small task does not require loading the whole manual.
+Locate the requested repository using SConstruct and src/runtime/app.h. Godot root is meow/ in the framework checkout and project/ in creator-generated projects; read meowody-project.json when present. Root README.md is the single handbook. Read relevant chapters and actual headers before editing; a small task does not require loading the whole manual.
 
 ## Reference routing
 
@@ -14,6 +14,7 @@ Use README explicit anchors or rg searches:
 | Task | Anchors | Source |
 | --- | --- | --- |
 | Initialization / builds | app, build-options | src/runtime/app.h, app.cpp, SConstruct |
+| New project creation / engine versions | project-creator | tools/project_creator, framework-dependencies.json, meowody-project.json, SConstruct |
 | Reflect properties / methods / signals | reflection | src/reflection; reflect_codegen |
 | Main thread / background tasks / input | main-thread, task, input | src/runtime/main_thread, task, input |
 | Events / reactive / coroutine / callbacks | core, event, reactive, coroutine | matching src/runtime directories |
@@ -32,7 +33,7 @@ The addons paths above are under meow/ on disk.
 
 ## Framework constraints
 
-- Framework root differs from Godot root: res:// means meow/, and C++ include paths start at src/.
+- Framework root differs from Godot root: res:// means the configured project_dir (meow/ by default, project/ in generated projects), and C++ include paths start at src/.
 - Use meowody::App::resource->, App::save-> and other current Proxy entries. Proxy only exposes operator->; removed Runtime::resources() interfaces are invalid.
 - Use GDREFLECT_CLASS and GDPROPERTY for ordinary runtime classes. Codegen generates missing accessor declarations, bodies and bindings. Business setters may provide validation, signals and resource notifications: preserve that behavior. Do not add explicit _bind_methods to reflected runtime classes.
 - Put business calls to generated accessors in cpp implementations; codegen disables generated declarations while scanning headers, so inline header calls may fail before those methods exist.
@@ -62,6 +63,10 @@ The addons paths above are under meow/ on disk.
 - SaveCenter public reads deep-copy results. Internal pending partitions may share only private, unmodified slot snapshots; snapshot new caller payloads before staging and preserve byte-limit/checksum/durability checks.
 - Input active contexts stay ordered by priority/latest activation; preserve same-name activations, exclusive/additive masks and same-frame edge suppression. Arc PackedArray pointers are valid only until a resize/COW detach; preserve trimmed/nested atlas clipping and test actual GPU pixels.
 - Reflect scans a single unsaved translation unit with full function bodies and original-header diagnostics; do not disable diagnostics or filter away unmarked dependency headers. Release optimization follows godot-cpp optimize=speed/speed_trace/size rather than overriding all builds with size flags.
+
+## Project creator
+
+Windows x64 desktop creator lives under tools/project_creator and uses the fixed framework Git repository. New projects use project/, include all framework services/plugins and blank scenes, and exclude business examples, TestNode and old artifacts. Pin official godot-cpp with framework-dependencies.json; initialize a matching gitlink or clone the pinned commit when there is none. SConstruct reads meowody-project.json for project_dir and the selected engine API; explicit API arguments win. Preserve current meow/ defaults. Engine downloads use official stable tags and SHA512 verification. Never reuse an arbitrary DLL for a different target API. Toolchain checks do not install system dependencies. Creator integration tests reuse the shared tests/workspace/meow workspace as a generated framework root, with its only Godot project in project/. Use tests/test_project_creator.py and tests/run_project_creator_test.py; packaging builds remain under build/project-creator.
 
 ## Build and verification
 

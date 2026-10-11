@@ -1,0 +1,6 @@
+{
+  "godot_cpp": {
+    "url": "https://github.com/godotengine/godot-cpp.git",
+    "commit": "507ed9d840c01a3c5b2a39af8bb4000bfac30bf5"
+  }
+}
