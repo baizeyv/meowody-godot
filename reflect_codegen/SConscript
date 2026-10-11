@@ -1,0 +1,54 @@
+Import('env')
+
+from pathlib import Path
+
+
+def _reflect_action(target, source, env):
+    import sys
+
+    tools_dir = env.Dir('#/reflect_codegen').abspath
+    if tools_dir not in sys.path:
+        sys.path.insert(0, tools_dir)
+
+    import reflect_generator
+
+    reflect_generator.generate_project(
+        Path(env.Dir('#/build/generated').abspath),
+        Path(env.Dir('#/build').abspath),
+        Path(env.Dir('#/src').abspath),
+        Path(env.Dir('#/godot-cpp').abspath),
+        [Path(item.abspath) for item in source],
+    )
+    return 0
+
+
+source_root = Path(env.Dir('#/src').abspath)
+headers = [
+    env.File(str(path))
+    for path in sorted(source_root.rglob('*'))
+    if path.is_file() and path.suffix in ('.h', '.hpp', '.hh', '.hxx')
+    and path.parent.name != 'reflection'
+]
+generated_dir = '#/build/generated'
+generated_sources = env.Command(
+    [
+        generated_dir + '/gd_register.gen.cpp',
+        generated_dir + '/gdreflect_bindings.gen.cpp',
+    ],
+    headers,
+    Action(_reflect_action, 'Generating GDReflect bindings'),
+)
+reflection_headers = [
+    env.File(str(path))
+    for path in (source_root / 'reflection').glob('*')
+    if path.is_file()
+]
+env.Depends(
+    generated_sources,
+    reflection_headers + [
+        env.File('#/reflect_codegen/reflect_generator.py'),
+    ],
+)
+
+env.Append(CPPPATH=[generated_dir])
+Return('generated_sources')

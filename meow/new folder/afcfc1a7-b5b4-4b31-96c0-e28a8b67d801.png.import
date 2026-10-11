@@ -1,0 +1,15 @@
+[remap]
+
+importer="meowody.ui_sprite"
+type="AtlasTexture"
+uid="uid://d2g062j81xs81"
+path="res://.godot/imported/afcfc1a7-b5b4-4b31-96c0-e28a8b67d801.png-e113a47cb4b4243db34d9066d5b256b8.res"
+
+[deps]
+
+source_file="res://new folder/afcfc1a7-b5b4-4b31-96c0-e28a8b67d801.png"
+dest_files=["res://.godot/imported/afcfc1a7-b5b4-4b31-96c0-e28a8b67d801.png-e113a47cb4b4243db34d9066d5b256b8.res"]
+
+[params]
+
+atlas_manifest="res://generated/ui_atlases/756yuen6jxu6/manifest.json"

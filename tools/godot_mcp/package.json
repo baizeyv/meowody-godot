@@ -1,0 +1,56 @@
+{
+  "name": "meowody-godot-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for authoring and inspecting Godot 4 projects (scenes, scripts, headless runs), with an optional live editor bridge.",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "godot",
+    "godot4",
+    "gdscript",
+    "claude"
+  ],
+  "homepage": "https://github.com/YasiruRF/godot-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/YasiruRF/godot-mcp/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/YasiruRF/godot-mcp.git"
+  },
+  "license": "MIT",
+  "author": "Yasiru Fernando",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "godot-mcp": "dist/index.js"
+  },
+  "directories": {
+    "test": "test"
+  },
+  "files": [
+    "dist",
+    "sample-project/addons",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "dev": "tsc -p tsconfig.json --watch",
+    "test": "npm run build && node --test"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "ws": "^8.18.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.5",
+    "@types/ws": "^8.5.12",
+    "typescript": "^5.6.3"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "private": true
+}

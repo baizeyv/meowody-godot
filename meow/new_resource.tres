@@ -1,0 +1,34 @@
+[gd_resource type="Resource" script_class="UISpriteAtlas" format=3 uid="uid://dlc5d5afahrnb"]
+
+[ext_resource type="Script" uid="uid://bwqr14bn6t7ev" path="res://addons/meowody_atlas/atlas_platform_settings.gd" id="1_1ivwu"]
+[ext_resource type="Script" uid="uid://cv6rediingjwp" path="res://addons/meowody_atlas/ui_sprite_atlas.gd" id="2_uauhc"]
+
+[sub_resource type="Resource" id="Resource_3gp3i"]
+script = ExtResource("1_1ivwu")
+override_enabled = true
+compression = 3
+
+[sub_resource type="Resource" id="Resource_xonew"]
+script = ExtResource("1_1ivwu")
+
+[sub_resource type="Resource" id="Resource_y3mkl"]
+script = ExtResource("1_1ivwu")
+
+[sub_resource type="Resource" id="Resource_ihbpk"]
+script = ExtResource("1_1ivwu")
+
+[sub_resource type="Resource" id="Resource_g03ti"]
+script = ExtResource("1_1ivwu")
+
+[resource]
+script = ExtResource("2_uauhc")
+packables = PackedStringArray("res://new folder")
+padding = 4
+extrude = 2
+default_settings = SubResource("Resource_xonew")
+android = SubResource("Resource_3gp3i")
+ios = SubResource("Resource_ihbpk")
+desktop = SubResource("Resource_y3mkl")
+web = SubResource("Resource_g03ti")
+atlas_id = "756yuen6jxu6"
+metadata/_custom_type_script = "uid://cv6rediingjwp"

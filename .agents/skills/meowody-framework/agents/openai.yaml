@@ -1,0 +1,4 @@
+interface:
+  display_name: "Meowody Framework"
+  short_description: "Develop Meowody native nodes, services and editor tools"
+  default_prompt: "Use $meowody-framework to implement and verify a change in this Meowody project."

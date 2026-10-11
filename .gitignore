@@ -1,0 +1,36 @@
+# SCons and native build products
+.sconsign.dblite
+*.os
+*.o
+*.obj
+*.a
+*.lib
+*.exp
+*.exe
+*.dll
+*.pdb
+*.so
+*.dylib
+*.framework
+/build/
+
+# Official dependency checkout; keep the Git submodule record
+/godot-cpp/
+
+# Python caches
+__pycache__/
+*.py[cod]
+
+# Godot caches; keep .uid and asset .import settings
+.godot/
+.import/
+
+# Test workspace
+/tests/workspace/
+
+# Node dependencies and MCP build output
+node_modules/
+/tools/godot_mcp/dist/
+
+# Machine-specific Codex configuration
+/.codex/config.toml

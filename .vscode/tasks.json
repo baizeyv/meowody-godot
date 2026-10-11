@@ -1,0 +1,19 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build GDExtension (Debug)",
+      "type": "shell",
+      "command": "scons platform=windows target=template_debug -j4",
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": ["$gcc"]
+    },
+    {
+      "label": "Build GDExtension (Release - MinSize)",
+      "type": "shell",
+      "command": "scons platform=windows target=template_release link_LTO=yes optimize=size debug_symbols=no -j4",
+      "group": "build",
+      "problemMatcher": ["$gcc"]
+    }
+  ]
+}

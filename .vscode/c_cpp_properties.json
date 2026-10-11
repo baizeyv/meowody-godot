@@ -1,0 +1,32 @@
+{
+    "configurations": [
+        {
+            "name": "GDExtension",
+            "includePath": [
+                "${workspaceFolder}/src/**",
+                "${workspaceFolder}/build/generated/**",
+                "${workspaceFolder}/godot-cpp/include",
+                "${workspaceFolder}/godot-cpp/gen/include",
+                "${workspaceFolder}/godot-cpp/gdextension"
+            ],
+            "cStandard": "c11",
+            "cppStandard": "c++20",
+            "compilerPath": "D:/Environment/LLVM/bin/clang++.exe",
+            "intelliSenseMode": "windows-clang-x64",
+            "compilerArgs": [
+                "-std=c++20"
+            ],
+            "browse": {
+                "path": [
+                    "${workspaceFolder}/src",
+                    "${workspaceFolder}/build/generated",
+                    "${workspaceFolder}/godot-cpp/include",
+                    "${workspaceFolder}/godot-cpp/gen/include",
+                    "${workspaceFolder}/godot-cpp/gdextension"
+                ],
+                "limitSymbolsToIncludedHeaders": true
+            }
+        }
+    ],
+    "version": 4
+}

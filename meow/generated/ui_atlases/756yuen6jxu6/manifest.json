@@ -1,0 +1,141 @@
+{
+	"asset": "res://new_resource.tres",
+	"catalog": "res://generated/ui_atlases/756yuen6jxu6/atlas.tres",
+	"files": [
+		"res://generated/ui_atlases/756yuen6jxu6/page_0.tres",
+		"res://generated/ui_atlases/756yuen6jxu6/data/page_0.ctex",
+		"res://generated/ui_atlases/756yuen6jxu6/data/.gdignore",
+		"res://.godot/meowody-atlas-cache/756yuen6jxu6/default/page_0.ctex",
+		"res://.godot/meowody-atlas-cache/756yuen6jxu6/android/page_0.ctex",
+		"res://generated/ui_atlases/756yuen6jxu6/sprites/new folder/afcfc1a7-b5b4-4b31-96c0-e28a8b67d801.tres",
+		"res://generated/ui_atlases/756yuen6jxu6/sprites/new folder/key.tres",
+		"res://generated/ui_atlases/756yuen6jxu6/sprites/new folder/avatar.jpg.tres",
+		"res://generated/ui_atlases/756yuen6jxu6/sprites/new folder/32.tres",
+		"res://generated/ui_atlases/756yuen6jxu6/sprites/new folder/Layer 1.png.tres",
+		"res://generated/ui_atlases/756yuen6jxu6/atlas.tres"
+	],
+	"fingerprint": "615b505283c2537b40a25bfc6c27a17b098a0cbe2157c781906616ed42e76147",
+	"import_backups": {
+		"res://new folder/32.png": "[remap]\n\nimporter=\"texture\"\ntype=\"CompressedTexture2D\"\nuid=\"uid://bj78qg8kbuljp\"\npath=\"res://.godot/imported/32.png-338b1374fe6e4f2e6ebcf670cd9ae13e.ctex\"\nmetadata={\n\"vram_texture\": false\n}\n\n[deps]\n\nsource_file=\"res://new folder/32.png\"\ndest_files=[\"res://.godot/imported/32.png-338b1374fe6e4f2e6ebcf670cd9ae13e.ctex\"]\n\n[params]\n\ncompress/mode=0\ncompress/high_quality=false\ncompress/lossy_quality=0.7\ncompress/uastc_level=0\ncompress/rdo_quality_loss=0.0\ncompress/hdr_compression=1\ncompress/normal_map=0\ncompress/channel_pack=0\nmipmaps/generate=false\nmipmaps/limit=-1\nroughness/mode=0\nroughness/src_normal=\"\"\nprocess/channel_remap/red=0\nprocess/channel_remap/green=1\nprocess/channel_remap/blue=2\nprocess/channel_remap/alpha=3\nprocess/fix_alpha_border=true\nprocess/premult_alpha=false\nprocess/normal_map_invert_y=false\nprocess/hdr_as_srgb=false\nprocess/hdr_clamp_exposure=false\nprocess/size_limit=0\ndetect_3d/compress_to=1\n",
+		"res://new folder/Layer 1.png": "[remap]\n\nimporter=\"texture\"\ntype=\"CompressedTexture2D\"\nuid=\"uid://b5vorwdue0bh3\"\npath=\"res://.godot/imported/Layer 1.png-4e7af9353cee54742e7c166b29aa014f.ctex\"\nmetadata={\n\"vram_texture\": false\n}\n\n[deps]\n\nsource_file=\"res://new folder/Layer 1.png\"\ndest_files=[\"res://.godot/imported/Layer 1.png-4e7af9353cee54742e7c166b29aa014f.ctex\"]\n\n[params]\n\ncompress/mode=0\ncompress/high_quality=false\ncompress/lossy_quality=0.7\ncompress/uastc_level=0\ncompress/rdo_quality_loss=0.0\ncompress/hdr_compression=1\ncompress/normal_map=0\ncompress/channel_pack=0\nmipmaps/generate=false\nmipmaps/limit=-1\nroughness/mode=0\nroughness/src_normal=\"\"\nprocess/channel_remap/red=0\nprocess/channel_remap/green=1\nprocess/channel_remap/blue=2\nprocess/channel_remap/alpha=3\nprocess/fix_alpha_border=true\nprocess/premult_alpha=false\nprocess/normal_map_invert_y=false\nprocess/hdr_as_srgb=false\nprocess/hdr_clamp_exposure=false\nprocess/size_limit=0\ndetect_3d/compress_to=1\n",
+		"res://new folder/afcfc1a7-b5b4-4b31-96c0-e28a8b67d801.png": "[remap]\n\nimporter=\"texture\"\ntype=\"CompressedTexture2D\"\nuid=\"uid://d2g062j81xs81\"\npath=\"res://.godot/imported/afcfc1a7-b5b4-4b31-96c0-e28a8b67d801.png-e113a47cb4b4243db34d9066d5b256b8.ctex\"\nmetadata={\n\"vram_texture\": false\n}\n\n[deps]\n\nsource_file=\"res://new folder/afcfc1a7-b5b4-4b31-96c0-e28a8b67d801.png\"\ndest_files=[\"res://.godot/imported/afcfc1a7-b5b4-4b31-96c0-e28a8b67d801.png-e113a47cb4b4243db34d9066d5b256b8.ctex\"]\n\n[params]\n\ncompress/mode=0\ncompress/high_quality=false\ncompress/lossy_quality=0.7\ncompress/uastc_level=0\ncompress/rdo_quality_loss=0.0\ncompress/hdr_compression=1\ncompress/normal_map=0\ncompress/channel_pack=0\nmipmaps/generate=false\nmipmaps/limit=-1\nroughness/mode=0\nroughness/src_normal=\"\"\nprocess/channel_remap/red=0\nprocess/channel_remap/green=1\nprocess/channel_remap/blue=2\nprocess/channel_remap/alpha=3\nprocess/fix_alpha_border=true\nprocess/premult_alpha=false\nprocess/normal_map_invert_y=false\nprocess/hdr_as_srgb=false\nprocess/hdr_clamp_exposure=false\nprocess/size_limit=0\ndetect_3d/compress_to=1\n",
+		"res://new folder/avatar.jpg": "[remap]\n\nimporter=\"texture\"\ntype=\"CompressedTexture2D\"\nuid=\"uid://bvbsltwa1w0jf\"\npath=\"res://.godot/imported/avatar.jpg-ea97b2e316fee399c59089d8caeef2e0.ctex\"\nmetadata={\n\"vram_texture\": false\n}\n\n[deps]\n\nsource_file=\"res://new folder/avatar.jpg\"\ndest_files=[\"res://.godot/imported/avatar.jpg-ea97b2e316fee399c59089d8caeef2e0.ctex\"]\n\n[params]\n\ncompress/mode=0\ncompress/high_quality=false\ncompress/lossy_quality=0.7\ncompress/uastc_level=0\ncompress/rdo_quality_loss=0.0\ncompress/hdr_compression=1\ncompress/normal_map=0\ncompress/channel_pack=0\nmipmaps/generate=false\nmipmaps/limit=-1\nroughness/mode=0\nroughness/src_normal=\"\"\nprocess/channel_remap/red=0\nprocess/channel_remap/green=1\nprocess/channel_remap/blue=2\nprocess/channel_remap/alpha=3\nprocess/fix_alpha_border=true\nprocess/premult_alpha=false\nprocess/normal_map_invert_y=false\nprocess/hdr_as_srgb=false\nprocess/hdr_clamp_exposure=false\nprocess/size_limit=0\ndetect_3d/compress_to=1\n",
+		"res://new folder/key.png": "[remap]\n\nimporter=\"texture\"\ntype=\"CompressedTexture2D\"\nuid=\"uid://dxrmmyh528ygu\"\npath=\"res://.godot/imported/key.png-6ee05bc80de94e61aca7870331d79f48.ctex\"\nmetadata={\n\"vram_texture\": false\n}\n\n[deps]\n\nsource_file=\"res://new folder/key.png\"\ndest_files=[\"res://.godot/imported/key.png-6ee05bc80de94e61aca7870331d79f48.ctex\"]\n\n[params]\n\ncompress/mode=0\ncompress/high_quality=false\ncompress/lossy_quality=0.7\ncompress/uastc_level=0\ncompress/rdo_quality_loss=0.0\ncompress/hdr_compression=1\ncompress/normal_map=0\ncompress/channel_pack=0\nmipmaps/generate=false\nmipmaps/limit=-1\nroughness/mode=0\nroughness/src_normal=\"\"\nprocess/channel_remap/red=0\nprocess/channel_remap/green=1\nprocess/channel_remap/blue=2\nprocess/channel_remap/alpha=3\nprocess/fix_alpha_border=true\nprocess/premult_alpha=false\nprocess/normal_map_invert_y=false\nprocess/hdr_as_srgb=false\nprocess/hdr_clamp_exposure=false\nprocess/size_limit=0\ndetect_3d/compress_to=1\n"
+	},
+	"pages": [
+		"res://generated/ui_atlases/756yuen6jxu6/page_0.tres"
+	],
+	"settings": {
+		"extrude": 2,
+		"max_size": 2048,
+		"packables": [
+			"res://new folder"
+		],
+		"padding": 4,
+		"profiles": {
+			"android": {
+				"compression": 3,
+				"mipmaps": false
+			},
+			"default": {
+				"compression": 0,
+				"mipmaps": false
+			}
+		},
+		"quality": 2,
+		"recursive": true,
+		"size_mode": 0,
+		"trim": false
+	},
+	"sprites": {
+		"res://new folder/32.png": {
+			"margin": [
+				0,
+				0,
+				0,
+				0
+			],
+			"page": 0,
+			"region": [
+				658,
+				1020,
+				512,
+				513
+			],
+			"resource": "res://generated/ui_atlases/756yuen6jxu6/sprites/new folder/32.tres"
+		},
+		"res://new folder/Layer 1.png": {
+			"margin": [
+				0,
+				0,
+				0,
+				0
+			],
+			"page": 0,
+			"region": [
+				658,
+				1545,
+				100,
+				102
+			],
+			"resource": "res://generated/ui_atlases/756yuen6jxu6/sprites/new folder/Layer 1.png.tres"
+		},
+		"res://new folder/afcfc1a7-b5b4-4b31-96c0-e28a8b67d801.png": {
+			"margin": [
+				0,
+				0,
+				0,
+				0
+			],
+			"page": 0,
+			"region": [
+				6,
+				6,
+				982,
+				1002
+			],
+			"resource": "res://generated/ui_atlases/756yuen6jxu6/sprites/new folder/afcfc1a7-b5b4-4b31-96c0-e28a8b67d801.tres"
+		},
+		"res://new folder/avatar.jpg": {
+			"margin": [
+				0,
+				0,
+				0,
+				0
+			],
+			"page": 0,
+			"region": [
+				6,
+				1020,
+				640,
+				640
+			],
+			"resource": "res://generated/ui_atlases/756yuen6jxu6/sprites/new folder/avatar.jpg.tres"
+		},
+		"res://new folder/key.png": {
+			"margin": [
+				0,
+				0,
+				0,
+				0
+			],
+			"page": 0,
+			"region": [
+				1000,
+				6,
+				982,
+				1002
+			],
+			"resource": "res://generated/ui_atlases/756yuen6jxu6/sprites/new folder/key.tres"
+		}
+	},
+	"variants": {
+		"android": [
+			"res://.godot/meowody-atlas-cache/756yuen6jxu6/android/page_0.ctex"
+		],
+		"default": [
+			"res://.godot/meowody-atlas-cache/756yuen6jxu6/default/page_0.ctex"
+		]
+	},
+	"version": 2
+}

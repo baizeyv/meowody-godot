@@ -1,0 +1,15 @@
+import os
+from pathlib import Path
+
+root = Path(os.environ["MEOWODY_TEST_ROOT"])
+output = Path(os.environ["MEOWODY_TEST_OUTPUT"])
+env = Environment()
+env.Append(CXXFLAGS=["/std:c++20", "/EHsc", "/MT", "/utf-8", "/Zc:__cplusplus", "/bigobj"])
+env.Append(CPPDEFINES=["HOT_RELOAD_ENABLED", "DEBUG_ENABLED", "DEBUG_METHODS_ENABLED", "WINDOWS_ENABLED"])
+env.Append(CPPPATH=[str(root / path) for path in ("src", "godot-cpp/include", "godot-cpp/gen/include", "godot-cpp/gdextension")])
+env.Append(LIBS=[str(root / "godot-cpp/bin/libgodot-cpp.windows.template_debug.x86_64.lib")])
+sources = ["tests/model_save_test.cpp"] + ["src/runtime/save/" + name + ".cpp" for name in
+    ("model_fields", "save_center", "save_queue", "save_store", "save_codec", "atomic_file")]
+sources += ["src/log/log.cpp", "src/log/log_stack.cpp", "src/log/log_records_stub.cpp"]
+objects = [env.SharedObject(str(output / (Path(source).stem + ".obj")), str(root / source)) for source in sources]
+Default(env.SharedLibrary(str(output / "model_save_test.dll"), objects))

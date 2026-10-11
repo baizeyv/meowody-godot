@@ -1,0 +1,14 @@
+[gd_resource type="MultiPatchSprite" format=3 uid="uid://bmq4yfc5r4lm"]
+
+[ext_resource type="Texture2D" uid="uid://b5vorwdue0bh3" path="res://new folder/Layer 1.png" id="1_4x827"]
+
+[resource]
+texture = ExtResource("1_4x827")
+region = Rect2i(0, 0, 100, 102)
+x_cuts = PackedInt32Array(25, 40, 60, 76)
+y_cuts = PackedInt32Array(33, 66)
+x_modes = PackedInt32Array(0, 1, 0, 1, 0)
+y_modes = PackedInt32Array(0, 1, 0)
+x_weights = PackedFloat32Array(1, 0.51, 1, 0.51, 0.7)
+y_weights = PackedFloat32Array(1, 1.01, 2)
+resource_name = "Layer 1_patch"

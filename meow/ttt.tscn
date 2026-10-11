@@ -1,0 +1,48 @@
+[gd_scene format=3 uid="uid://d1hrl0i40y1ms"]
+
+[ext_resource type="Texture2D" uid="uid://dxrmmyh528ygu" path="res://new folder/key.png" id="1_sjl4l"]
+
+[node name="Ttt" type="TttView" unique_id=1139164916 node_paths=PackedStringArray("m_aw", "m_ac", "m_color_rect", "m_aw_2")]
+m_aw = NodePath("aw")
+m_ac = NodePath("ac")
+m_color_rect = NodePath("ac/ColorRect")
+m_aw_2 = NodePath("aw2")
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+metadata/meowody_bind_base = "Control"
+metadata/meowody_bind_class = "TttView"
+metadata/meowody_bind_output = "../src/ui/generated"
+metadata/meowody_bind_ui = false
+metadata/meowody_ui_enter = ""
+metadata/meowody_ui_exit = ""
+metadata/meowody_ui_animation_player = NodePath("")
+
+[node name="aw" type="CanvasLayer" parent="." unique_id=389923631]
+metadata/meowody_bind = true
+
+[node name="ac" type="TestNode" parent="." unique_id=231935308]
+metadata/meowody_bind = true
+
+[node name="ColorRect" type="ColorRect" parent="ac" unique_id=970793370]
+offset_right = 40.0
+offset_bottom = 40.0
+color = Color(0.2627451, 1, 1, 1)
+metadata/meowody_bind = true
+
+[node name="aw2" type="MultiplayerSpawner" parent="." unique_id=1505481450]
+metadata/meowody_bind = true
+
+[node name="TextureRect" type="TextureRect" parent="aw2" unique_id=780175148]
+offset_right = 40.0
+offset_bottom = 40.0
+texture = ExtResource("1_sjl4l")
+
+[node name="RepeatButton" type="RepeatButton" parent="." unique_id=1294607412]
+layout_mode = 0
+offset_left = 974.0
+offset_top = 18.0
+offset_right = 1128.0
+offset_bottom = 112.0

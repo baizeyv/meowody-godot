@@ -1,0 +1,15 @@
+[remap]
+
+importer="meowody.ui_sprite"
+type="AtlasTexture"
+uid="uid://b5vorwdue0bh3"
+path="res://.godot/imported/Layer 1.png-4e7af9353cee54742e7c166b29aa014f.res"
+
+[deps]
+
+source_file="res://new folder/Layer 1.png"
+dest_files=["res://.godot/imported/Layer 1.png-4e7af9353cee54742e7c166b29aa014f.res"]
+
+[params]
+
+atlas_manifest="res://generated/ui_atlases/756yuen6jxu6/manifest.json"

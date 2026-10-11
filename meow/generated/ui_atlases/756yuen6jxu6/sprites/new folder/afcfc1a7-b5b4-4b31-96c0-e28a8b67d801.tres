@@ -1,0 +1,9 @@
+[gd_resource type="AtlasTexture" load_steps=2 format=3 uid="uid://caoyrcocfsu6v"]
+
+[ext_resource type="CompressedTexture2D" path="res://generated/ui_atlases/756yuen6jxu6/page_0.tres" id="1"]
+
+[resource]
+atlas = ExtResource("1")
+region = Rect2(6, 6, 982, 1002)
+margin = Rect2(0, 0, 0, 0)
+filter_clip = true
