@@ -2,6 +2,7 @@
 import json
 import hashlib
 import io
+import subprocess
 from pathlib import Path
 import sys
 import tempfile
@@ -11,7 +12,7 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools/project_creator"))
-from creator import generate_project, inspect_engine, download_engine, prepare_dependency
+from creator import generate_project, inspect_engine, download_engine, prepare_dependency, run
 
 
 class ProjectCreatorTest(unittest.TestCase):
@@ -82,6 +83,34 @@ class ProjectCreatorTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "differs"):
                 prepare_dependency(self.source, self.destination, {"commit": "b" * 40}, print)
             self.assertEqual(command.call_count, 1)
+
+    def test_real_submodule_registration_and_clone_restore(self):
+        seed = self.base / "dependency-seed"
+        run(["git", "init", seed], self.base, log=lambda _: None)
+        (seed / "SConstruct").write_text("# fixture\n")
+        run(["git", "add", "SConstruct"], seed, log=lambda _: None)
+        run(["git", "-c", "user.name=Creator Test", "-c", "user.email=creator@example.invalid", "commit", "-m", "fixture"], seed, log=lambda _: None)
+        commit = run(["git", "rev-parse", "HEAD"], seed, log=lambda _: None)
+        run(["git", "init"], self.source, log=lambda _: None)
+        self.generate()
+        def local_checkout(_url, ref, destination, log):
+            run(["git", "clone", "--no-hardlinks", seed, destination], destination.parent, log)
+            run(["git", "checkout", "--detach", ref], destination, log)
+        dependency = {"url": "https://github.com/godotengine/godot-cpp.git", "commit": commit}
+        with patch("creator.checkout", side_effect=local_checkout):
+            prepare_dependency(self.source, self.destination, dependency, log=lambda _: None)
+        self.assertIn(dependency["url"], (self.destination / ".gitmodules").read_text())
+        gitlink = run(["git", "ls-files", "--stage", "godot-cpp"], self.destination, log=lambda _: None)
+        self.assertTrue(gitlink.startswith("160000 " + commit))
+        self.assertTrue((self.destination / "godot-cpp/.git").is_file())
+        result = subprocess.run(["git", "rev-parse", "--verify", "HEAD"], cwd=self.destination, capture_output=True)
+        self.assertNotEqual(result.returncode, 0)  # Creator made no parent commit.
+        run(["git", "-c", "user.name=Creator Test", "-c", "user.email=creator@example.invalid", "commit", "-m", "fixture project"], self.destination, log=lambda _: None)
+        restored = self.base / "restored"
+        run(["git", "clone", "--no-hardlinks", self.destination, restored], self.base, log=lambda _: None)
+        run(["git", "config", "submodule.godot-cpp.url", seed], restored, log=lambda _: None)
+        run(["git", "-c", "protocol.file.allow=always", "submodule", "update", "--init", "--recursive"], restored, log=lambda _: None)
+        self.assertEqual(run(["git", "rev-parse", "HEAD"], restored / "godot-cpp", log=lambda _: None), commit)
 
     def test_download_checksum_and_cache(self):
         archive = io.BytesIO()

@@ -101,7 +101,7 @@ Windows 桌面创建器从本框架的 Git 远程仓库指定版本生成独立�
 
 源码启动：`python tools/project_creator/app.py`。打包 EXE：`./tools/project_creator/build.ps1`；输出在 `build/project-creator/dist/MeowodyProjectCreator.exe`。创建时支持下载官方 Godot 稳定版或选择本地引擎，并完成固定 godot-cpp 依赖准备、Debug 编译和加载验证。详情见 [创建器说明](tools/project_creator/README.md)。首次使用前需推送 `framework-dependencies.json` 和支持版本配置的 SConstruct；旧 ref 缺少固定依赖记录会停止创建。
 
-`framework-dependencies.json` 固定官方 godot-cpp 提交；新项目的 `meowody-project.json` 保存 Godot/API 版本及 `project_dir`。普通构建与编辑器热重载共用这些配置，显式命令行 API 参数优先。未配置该文件时，本仓库仍按原有 `meow/` 和 4.7 默认配置构建。
+`framework-dependencies.json` 固定官方 godot-cpp 提交；创建器为新工程初始化独立 Git 仓库，生成 `.gitmodules` 并注册固定提交的 godot-cpp 子模块，不自动提交或推送。克隆新工程后执行 `git submodule update --init --recursive` 恢复依赖。新项目的 `meowody-project.json` 保存 Godot/API 版本及 `project_dir`。普通构建与编辑器热重载共用这些配置，显式命令行 API 参数优先。未配置该文件时，本仓库仍按原有 `meow/` 和 4.7 默认配置构建。
 
 <a id="layout"></a>
 ## 项目结构、资源路径与命名

@@ -9,7 +9,7 @@ import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
-from creator import build_and_verify, create_project, inspect_engine, preflight, release_versions
+from creator import build_and_verify, create_project, inspect_engine, preflight, release_versions, run
 
 
 class Application:
@@ -150,6 +150,9 @@ class Application:
                 raise ValueError("请使用创建项目时的 Godot 版本。")
             if not (directory / "godot-cpp/SConstruct").is_file():
                 raise ValueError("godot-cpp 下载尚未完成，请使用新的空目录重新创建。")
+            gitlink = run(["git", "ls-files", "--stage", "godot-cpp"], directory, log=lambda _: None)
+            if not gitlink.startswith("160000 " + config["godot_cpp_commit"]) or not (directory / ".gitmodules").is_file():
+                raise ValueError("godot-cpp 子模块尚未正确注册，请使用新的空目录重新创建。")
             log_path = directory / "build/creator/rebuild.log"
             log_path.parent.mkdir(parents=True, exist_ok=True)
             with log_path.open("w", encoding="utf-8") as file:

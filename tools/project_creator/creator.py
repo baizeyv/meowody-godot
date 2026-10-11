@@ -5,7 +5,6 @@ import os
 from pathlib import Path
 import re
 import shutil
-import stat
 import subprocess
 import tempfile
 import urllib.request
@@ -182,7 +181,9 @@ Both plain builds and editor reloads read meowody-project.json and godot-api/ext
 Install Git, Python, SCons, matching clang Python bindings/libclang, MSVC and a Windows SDK.
 MCP server: `cd tools/godot_mcp`, `npm ci --ignore-scripts`, `npm run build` (Node.js 20+).
 Start MCP with `node tools/godot_mcp/dist/index.js --project "ABSOLUTE_PATH/project"`.
-This project owns its sources and godot-cpp checkout. Keep framework-dependencies.json to restore the pinned dependency.
+This project has its own Git repository and a pinned godot-cpp submodule; no commits are created automatically.
+After cloning this project, restore dependencies with `git submodule update --init --recursive`.
+Commit .gitmodules, the godot-cpp gitlink and framework-dependencies.json together to preserve the dependency version.
 The handbook's upstream regression commands require the original framework repository; test projects are not included here.
 ''', encoding="utf-8")
     return dependency
@@ -193,15 +194,12 @@ def prepare_dependency(source, destination, dependency, log):
     if gitlink.startswith("160000 "):
         if gitlink.split()[1] != dependency["commit"]:
             raise ValueError("Submodule commit differs from framework-dependencies.json.")
-        run(["git", "submodule", "update", "--init", "--recursive", "--", "godot-cpp"], source, log)
-        copy_source(source / "godot-cpp", destination / "godot-cpp")
-    else:
-        checkout(dependency["url"], dependency["commit"], destination / "godot-cpp", log)
-        # Independent projects keep source, not a nested repository.
-        def remove_readonly(function, path, _error):
-            os.chmod(path, stat.S_IWRITE)
-            function(path)
-        shutil.rmtree(destination / "godot-cpp/.git", onerror=remove_readonly)
+    run(["git", "init", destination], destination.parent, log)
+    checkout(dependency["url"], dependency["commit"], destination / "godot-cpp", log)
+    # --force registers the dependency even when the template ignores its checkout.
+    run(["git", "submodule", "add", "--force", dependency["url"], "godot-cpp"], destination, log)
+    run(["git", "submodule", "absorbgitdirs", "godot-cpp"], destination, log)
+    run(["git", "submodule", "update", "--init", "--recursive"], destination, log)
 
 
 def build_and_verify(destination, godot, log):

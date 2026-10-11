@@ -2,6 +2,7 @@
 import os
 from pathlib import Path
 import shutil
+import stat
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKSPACE = ROOT / "tests/workspace"
@@ -17,7 +18,11 @@ def prepare_workspace():
     elif os.path.isjunction(dependency):
         dependency.rmdir()
     if WORKSPACE.exists():
-        shutil.rmtree(WORKSPACE)
+        # Creator tests contain Git objects marked read-only on Windows.
+        def remove_readonly(function, path, _error):
+            os.chmod(path, stat.S_IWRITE)
+            function(path)
+        shutil.rmtree(WORKSPACE, onerror=remove_readonly)
     project = WORKSPACE / "meow"
     project.mkdir(parents=True)
     shutil.copytree(ROOT / "tests/fixtures", project / "tests")

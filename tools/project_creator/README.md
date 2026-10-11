@@ -24,13 +24,15 @@ python tools/project_creator/app.py
 
 1. 填写项目名称并选择父目录，程序生成对应的目标路径；也可手动指定一个新目录或空目录。
 2. 选择框架 ref。选择下载官方 Godot 稳定版本，或已有的 Godot EXE。支持标准 Windows x64 单精度 Godot 4；4.7 为验证基线，其他版本会实际编译验证，不承诺旧 API 兼容。
-3. 点击“创建并验证”。程序获取框架，准备固定提交的 godot-cpp，复制框架源码、全部框架插件及工具，生成空白主场景。
+3. 点击“创建并验证”。程序获取框架，初始化新工程的独立 Git 仓库，将 godot-cpp 注册为固定提交的子模块，复制框架源码、全部框架插件及工具，生成空白主场景。不自动提交或推送。
 4. 从选定引擎导出 API，编译 Debug 扩展，验证编辑器导入、原生类注册和空白场景运行。
 5. 成功后点击“打开 Godot 项目”。程序不会自动提交、推送或启动编辑器。
 
 引擎版本来自官方 godot-builds Git 标签，发布包通过官方 SHA512 校验；引擎和上次选择保存在 `%LOCALAPPDATA%/MeowodyProjectCreator`。私有 Git 来源复用本机凭据，不保存密码或令牌。失败会保留已生成的文件；编译失败可使用“重新编译并验证”，依赖下载尚未完成则选择新的空目录重试。日志在新工程的 `build/creator/`。
 
-**首次使用前，请将本次的 `framework-dependencies.json`、SConstruct 和创建器改动推送到框架远程仓库。** 缺少固定依赖记录的旧 ref 会被拒绝。godot-cpp 有子模块记录时初始化子模块并检查提交一致性；没有记录时从官方仓库检出锁定提交，不依赖 `.gitmodules` 的分支。
+**首次使用前，请将本次的 `framework-dependencies.json`、SConstruct 和创建器改动推送到框架远程仓库。** 缺少固定依赖记录的旧 ref 会被拒绝。框架有子模块记录时检查它与依赖锁定文件一致；无论框架是否采用子模块，新工程都会生成自己的 `.gitmodules` 和 godot-cpp gitlink，并固定到依赖记录的提交。创建器通过 `--force` 注册子模块，保留现有 `.gitignore` 对依赖目录的忽略规则。
+
+生成的 `.gitmodules` 和 godot-cpp 子模块记录已暂存，新工程没有自动提交，也没有设置业务项目远程地址。提交新项目时保留这两项和 `framework-dependencies.json`。其他机器克隆新项目后执行 `git submodule update --init --recursive` 即可恢复同一版本依赖。此调整适用于新创建工程，不会自动转换此前生成的源码副本工程。
 
 ## 新工程
 
@@ -38,7 +40,8 @@ python tools/project_creator/app.py
 新工程/
 ├── project/               project.godot、main.tscn、addons、bin
 ├── src/                   runtime、editor、log、reflection、注册入口
-├── godot-cpp/             固定提交的官方源码
+├── godot-cpp/             固定提交的官方 Git 子模块
+├── .gitmodules
 ├── godot-api/             所选引擎导出的扩展 API
 ├── reflect_codegen/
 ├── tools/godot_mcp/
