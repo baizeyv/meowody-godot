@@ -47,7 +47,7 @@ namespace meowody
 
 	void CoroutineCenter::update(const double p_delta_time)
 	{
-		if (m_updating) return;
+		if (m_updating || m_suspended) return;
 		m_updating = true;
 		struct Guard { bool& flag; ~Guard() { flag = false; } } guard{m_updating};
 		m_delta_time = p_delta_time;
@@ -62,6 +62,7 @@ namespace meowody
 		const auto count = static_cast<std::uint32_t>(m_slots.size());
 		for (std::uint32_t index = 0; index < count; ++index)
 		{
+			if (m_suspended) break;
 			if (!m_slots[index].active || m_slots[index].started_at > cutoff) continue;
 			const auto id = make_id(index, m_slots[index].generation);
 			const auto coroutine = m_slots[index].coroutine;

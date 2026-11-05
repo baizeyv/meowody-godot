@@ -5,6 +5,7 @@
 #include "log/log.hpp"
 #include <godot_cpp/classes/scene_tree.hpp>
 #include <godot_cpp/classes/window.hpp>
+#include <godot_cpp/classes/display_server.hpp>
 
 namespace meowody {
 App *App::singleton = nullptr;
@@ -81,12 +82,23 @@ void App::attach_to_tree() {
 	set_name("App");
 	set_process_mode(Node::PROCESS_MODE_ALWAYS);
 	tree->get_root()->add_child(this);
+	original_auto_quit = tree->is_auto_accept_quit();
+	original_back_quit = tree->is_quit_on_go_back();
+	tree->set_auto_accept_quit(false);
+	tree->set_quit_on_go_back(false);
+	lifecycle_attached = true;
+	lifecycle.focused = tree->get_root()->has_focus();
+	lifecycle.game_paused = tree->is_paused();
+	lifecycle.minimized = godot::DisplayServer::get_singleton()->get_name() != "headless" && tree->get_root()->get_mode() == godot::Window::MODE_MINIMIZED;
+	input_center->set_focused(lifecycle.focused && !lifecycle.minimized);
+	update_background();
 	set_process(true);
 }
 void App::finalize() {
 	if (singleton == nullptr)
 		return;
-	ERR_FAIL_COND_MSG(singleton->updating, "Finalize Runtime after update has returned");
+	ERR_FAIL_COND_MSG(singleton->updating || singleton->lifecycle_busy || singleton->request_busy || singleton->quit_busy || singleton->memory_busy,
+		"Finalize Runtime after updates and lifecycle callbacks have returned");
 	memdelete(singleton);
 }
 App *App::get_singleton() { return singleton; }
@@ -167,29 +179,56 @@ InputCenter &App::get_input_center() {
 	DEV_ASSERT(singleton && singleton->input_center); return *singleton->input_center;
 }
 void App::_notification(int what) {
-	if (!input_center) return;
-	if (what == NOTIFICATION_APPLICATION_FOCUS_OUT) input_center->set_focused(false);
-	else if (what == NOTIFICATION_APPLICATION_FOCUS_IN) input_center->set_focused(true);
+	if (!lifecycle_available() || lifecycle.quitting) return;
+	if (what == NOTIFICATION_APPLICATION_FOCUS_OUT || what == NOTIFICATION_APPLICATION_FOCUS_IN) {
+		bool focused = what == NOTIFICATION_APPLICATION_FOCUS_IN;
+		if (lifecycle.focused == focused) return;
+		lifecycle.focused = focused;
+		input_center->set_focused(focused && !lifecycle.background);
+		event_center->emit(ApplicationEvent{ApplicationEventKind::FocusChanged, lifecycle});
+	} else if (what == NOTIFICATION_APPLICATION_PAUSED || what == NOTIFICATION_APPLICATION_RESUMED) {
+		lifecycle.system_paused = what == NOTIFICATION_APPLICATION_PAUSED;
+		update_background();
+	} else if (what == NOTIFICATION_OS_MEMORY_WARNING) low_memory();
+	else if (what == NOTIFICATION_WM_GO_BACK_REQUEST) request_back();
+	else if (what == NOTIFICATION_WM_CLOSE_REQUEST) request_quit();
 }
 
 void App::_process(double p_delta_time) {
-	if (singleton != this || stopping || updating || late_pending)
+	if (singleton != this || stopping || updating)
 		return;
+	auto* tree = godot::Object::cast_to<godot::SceneTree>(godot::Engine::get_singleton()->get_main_loop());
+	if (tree && tree->get_root()) {
+		bool minimized = godot::DisplayServer::get_singleton()->get_name() != "headless" && tree->get_root()->get_mode() == godot::Window::MODE_MINIMIZED;
+		if (lifecycle.minimized != minimized) { lifecycle.minimized = minimized; update_background(); }
+	}
+	if (lifecycle.background || lifecycle.quitting || late_pending) return;
+	bool skip_game = resume_frame;
+	resume_frame = false;
 	singleton->updating = true;
 	struct Guard {
 		bool &flag;
 		~Guard() { flag = false; }
 	} guard{ singleton->updating };
 	singleton->main_thread_center->update();
+	if (lifecycle.background || lifecycle.quitting) return;
 	singleton->time_center->update();
+	if (lifecycle.background || lifecycle.quitting) return;
 	singleton->download_center->update();
+	if (lifecycle.background || lifecycle.quitting) return;
 	singleton->resource_center->update();
+	if (lifecycle.background || lifecycle.quitting) return;
 	singleton->net_center->update();
-	singleton->audio_center->update(p_delta_time);
-	singleton->scene_center->update(p_delta_time);
-	singleton->ui_center->update(p_delta_time);
-	debug_center->update(p_delta_time);
+	if (lifecycle.background || lifecycle.quitting) return;
+	singleton->audio_center->update(skip_game ? 0 : p_delta_time);
+	if (lifecycle.background || lifecycle.quitting) return;
+	if (!skip_game && !(tree && tree->is_paused())) singleton->scene_center->update(p_delta_time);
+	if (lifecycle.background || lifecycle.quitting) return;
+	if (!skip_game) singleton->ui_center->update(p_delta_time);
+	if (lifecycle.background || lifecycle.quitting) return;
+	debug_center->update(skip_game ? 0 : p_delta_time);
 	late_delta = p_delta_time;
+	late_game_enabled = !skip_game;
 	late_pending = true;
 	call_deferred("late_process");
 }
@@ -203,8 +242,11 @@ void App::late_process() {
 		bool &flag;
 		~Guard() { flag = false; }
 	} guard{ updating };
-	tween_center->update();
-	coroutine_center->update(late_delta);
+	if (lifecycle.background || lifecycle.quitting) return;
+	if (late_game_enabled) tween_center->update();
+	auto* tree = godot::Object::cast_to<godot::SceneTree>(godot::Engine::get_singleton()->get_main_loop());
+	if (late_game_enabled && !lifecycle.background && !lifecycle.quitting && !(tree && tree->is_paused())) coroutine_center->update(late_delta);
+	if (lifecycle.background || lifecycle.quitting) return;
 	save_center->flush_frame(godot::Engine::get_singleton()->get_process_frames());
 }
 
@@ -220,6 +262,7 @@ void App::startup() {
 	coroutine_center = new CoroutineCenter;
 	download_center = new DownloadCenter;
 	resource_center = new ResourceCenter(*download_center);
+	resource_center->initialize();
 	save_center = new SaveCenter;
 	pool_center = new PoolCenter;
 	time_center = new TimeCenter;
@@ -242,6 +285,15 @@ void App::shutdown() {
 	stopping = true;
 	set_process(false);
 	late_pending = false;
+	if (lifecycle_attached) {
+		auto* tree = godot::Object::cast_to<godot::SceneTree>(godot::Engine::get_singleton()->get_main_loop());
+		if (tree) {
+			if (!tree->is_auto_accept_quit()) tree->set_auto_accept_quit(original_auto_quit);
+			if (!tree->is_quit_on_go_back()) tree->set_quit_on_go_back(original_back_quit);
+			if (lifecycle.background) tree->set_pause(lifecycle.game_paused);
+		}
+		lifecycle_attached = false;
+	}
 	ui_center->shutdown();
 	delete ui_center;
 	ui_center = nullptr;

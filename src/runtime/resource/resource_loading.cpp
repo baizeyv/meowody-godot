@@ -1,5 +1,4 @@
 #include "resource_center.h"
-#include "runtime/download/http_url.h"
 #include <algorithm>
 namespace meowody {
 
@@ -39,8 +38,7 @@ void ResourceCenter::submit_local(const godot::String& key)
     for (const auto& request : job.requests)
         if (!is_load_finished(request->status)) request->status = LoadStatus::Loading;
 }
-void ResourceCenter::enqueue(const godot::String& input, const std::shared_ptr<detail::LoadState>& state,
-                             const godot::String& pack_entry)
+void ResourceCenter::enqueue(const godot::String& input, const std::shared_ptr<detail::LoadState>& state)
 {
     if (m_closed)
     {
@@ -49,57 +47,44 @@ void ResourceCenter::enqueue(const godot::String& input, const std::shared_ptr<d
         return;
     }
     m_requests.push_back(state);
-    state->path = pack_entry.is_empty() ? normalize(input) : pack_key(input, pack_entry);
+    state->path = normalize(input);
     m_history.track(state->path, state);
     if (state->path.is_empty())
     {
-        complete(*state, {{}, LoadError::InvalidPath, godot::OK, "Invalid resource URL, path, UID or pack entry"});
+        complete(*state, {{}, LoadError::InvalidPath, godot::OK, "Expected a configured resource address"});
         return;
     }
-    if (auto resource = cached(state->path); resource.is_valid()) { complete(*state, {resource}); return; }
-    const auto remote = detail::parse_http_url(input);
-    if (remote.valid() && pack_entry.is_empty() && !detail::RemoteResourceLoader::supports(remote.url))
-    {
-        complete(*state, {{}, LoadError::UnsupportedRemoteFormat, godot::OK, "Use a supported extension, or load_pack_async for PCK/ZIP"});
-        return;
-    }
+    if (auto resource = cached(state->path); resource.is_valid()) { complete(*state, {resource}); m_retained[state->path].push_back(state); return; }
     auto [entry, inserted] = m_jobs.try_emplace(state->path);
     auto& job = entry->second;
     job.requests.push_back(state);
-    state->status = remote.valid() && !job.submitted ? LoadStatus::Downloading : LoadStatus::Loading;
+    m_retained[state->path].push_back(state);
+    state->status = LoadStatus::Loading;
     if (!inserted) return;
-    if (remote.valid())
-    {
-        job.source_url = remote.url;
-        job.pack_entry = pack_entry.is_empty() ? godot::String() : normalize(pack_entry);
-        job.download = m_downloads->download(remote.url);
-    }
-    else
-    {
-        job.local_path = state->path;
-        submit_local(state->path);
-    }
+    job.local_path = m_catalog->path(state->path);
+    advance_remote(state->path);
 }
 void ResourceCenter::advance_remote(const godot::String& key)
 {
-    auto& job = m_jobs.at(key);
-    for (const auto& state : job.requests)
-        if (!is_load_finished(state->status)) state->progress = job.download.progress() * 0.85f;
-    if (!job.download.finished()) return;
-    const auto downloaded = job.download.result();
-    if (!downloaded)
-    {
-        finish_job(key, {{}, LoadError::DownloadFailed, downloaded.godot_error,
-                        downloaded.message + godot::String(" (HTTP ") + godot::String::num_int64(downloaded.http_status) + godot::String(")")});
+    const auto& requests = m_jobs.at(key).requests;
+    if (std::none_of(requests.begin(), requests.end(), [](const auto& state) { return !is_load_finished(state->status); })) {
+        m_jobs.erase(key);
         return;
     }
-    const bool wanted = std::any_of(job.requests.begin(), job.requests.end(), [](const auto& state) {
-        return !is_load_finished(state->status);
-    });
-    if (!wanted) { m_jobs.erase(key); return; }
-    const auto prepared = m_remote.prepare(downloaded.path, job.pack_entry);
-    if (prepared.native_path.is_empty()) { finish_job(key, prepared.result); return; }
-    job.local_path = prepared.native_path;
+    auto error = m_catalog->prepare(key, true);
+    if (error == LoadError::NotInitialized && m_catalog->error() == LoadError::None) return;
+    if (error == LoadError::RemoteRequiresAsync) {
+        for (const auto& state : m_jobs.at(key).requests) if (!is_load_finished(state->status)) {
+            state->status = LoadStatus::Downloading;
+            state->progress = m_catalog->download_progress(key) * 0.85f;
+        }
+        return;
+    }
+    if (error != LoadError::None) {
+        finish_job(key, {{}, error, godot::OK, m_catalog->ready() ? godot::String("Cannot prepare address: ") + key : m_catalog->message()});
+        return;
+    }
+    m_jobs.at(key).local_path = m_catalog->path(key);
     submit_local(key);
 }
 void ResourceCenter::poll_jobs()
@@ -115,7 +100,7 @@ void ResourceCenter::poll_jobs()
         if (!job.submitted) { advance_remote(key); continue; }
         float progress = 0.0f;
         const auto status = m_backend->poll(job.local_path, progress);
-        const float offset = job.source_url.is_empty() ? 0.0f : 0.85f;
+        const float offset = 0.0f;
         for (const auto& state : job.requests)
             if (!is_load_finished(state->status))
                 state->progress = std::max(state->progress, offset + (1 - offset) * std::clamp(progress, 0.0f, 1.0f));

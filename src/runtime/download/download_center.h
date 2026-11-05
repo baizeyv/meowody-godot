@@ -28,6 +28,8 @@ public:
     bool resume(const godot::String& url, const DownloadOptions& options = {});
     bool cancel(const godot::String& url, const DownloadOptions& options = {});
     void cancel_all();
+    void set_suspended(bool suspended);
+    bool is_suspended() const { return m_suspended; }
     std::size_t pending_count() const;
     bool is_idle() const { return m_tasks.empty() && m_immediate.empty(); }
     bool is_closed() const { return m_closed; }
@@ -44,5 +46,6 @@ private:
     detail::RequestHistory<detail::DownloadState, DownloadProgress> m_history{DownloadProgress::snapshot};
     bool m_updating = false;
     bool m_closed = false;
+    bool m_suspended = false;
 };
 }

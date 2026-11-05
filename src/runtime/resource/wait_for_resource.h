@@ -20,5 +20,6 @@ private:
 template <typename T>
 auto wait_for_resource(LoadHandle<T> handle) { return WaitForResource<LoadHandle<T>>(std::move(handle)); }
 inline auto wait_for_resources(BatchLoadHandle handle) { return WaitForResource<BatchLoadHandle>(std::move(handle)); }
+inline auto wait_for_resource_operation(ResourceOperation handle) { return WaitForResource<ResourceOperation>(std::move(handle)); }
 }
 #endif

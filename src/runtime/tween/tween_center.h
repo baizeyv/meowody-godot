@@ -16,6 +16,8 @@ namespace meowody
 		void							update();
 		void							shutdown();
 		bool							is_closed() const;
+		void set_suspended(bool suspended);
+		bool is_suspended() const;
 		std::vector<tween::TweenHandle> find(godot::Object* target) const;
 		std::vector<tween::TweenHandle> find(const godot::StringName& id) const;
 		size_t							kill(godot::Object*);

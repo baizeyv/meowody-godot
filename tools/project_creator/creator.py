@@ -151,6 +151,10 @@ def generate_project(source, destination, name, engine_version, api_version, fra
         skill.write_text(skill.read_text(encoding="utf-8").replace("meow/", "project/").replace("Root README.md is the single handbook", "FRAMEWORK.md is the framework handbook"), encoding="utf-8")
     project = destination / "project"
     copy_source(source / "meow/addons", project / "addons")
+    resource_settings = source / "meow/resources/settings.json"
+    if resource_settings.is_file():
+        (project / "resources").mkdir()
+        shutil.copy2(resource_settings, project / "resources/settings.json")
     (project / "bin").mkdir()
     extension = (source / "meow/bin/meowody.gdextension").read_text(encoding="utf-8")
     extension = re.sub(r'compatibility_minimum\s*=\s*"[^"]+"', f'compatibility_minimum = "{api_version}"', extension)

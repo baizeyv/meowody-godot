@@ -24,7 +24,7 @@ UICenter::UICenter(ResourceCenter& r,SceneCenter* scenes):resources(r) {
 }
 UICenter::~UICenter() { shutdown(); }
 String UICenter::normalize(const String& path) const {
-    auto result=path.replace("\\","/"); if(!result.contains("://")) result="res://"+result; return result.simplify_path();
+    return path;
 }
 bool UICenter::configure(const String& path,UIOptions options,UIPresenterFactory factory) {
     auto key=normalize(path); if(stopped || path.is_empty() || options.animation_timeout<=0 || !std::isfinite(options.animation_timeout)) return false;
@@ -71,16 +71,16 @@ UIHandle UICenter::request(const String& path,const Variant& data,bool asynchron
 }
 void UICenter::start(Instance& i) {
     auto cached=std::find_if(cache.begin(),cache.end(),[&](auto& c) { return c.path==i.path; });
-    if(cached!=cache.end()) { i.state->root_id=cached->root; cache.erase(cached); if(!node(i.state->root_id)) i.state->root_id=0; }
+    if(cached!=cache.end()) { i.state->root_id=cached->root; i.resource=cached->resource; cache.erase(cached); if(!node(i.state->root_id)) i.state->root_id=0; }
     if(i.asynchronous) {
         i.state->status=UIStatus::Loading;
-        if(!i.state->root_id) i.load=i.config->options.pack_url.is_empty() ? resources.load_async<PackedScene>(i.path) : resources.load_pack_async<PackedScene>(i.config->options.pack_url,i.path);
+        if(!i.state->root_id) i.load=resources.load_async<PackedScene>(i.path);
         return;
     }
     if(!i.state->root_id) {
-        if(!i.config->options.pack_url.is_empty()) { i.state->status=UIStatus::Failed; i.state->error="Remote packs require open_async"; return; }
         auto result=resources.load<PackedScene>(i.path);
         if(!result) { i.state->status=UIStatus::Failed; i.state->error=result.message; return; }
+        i.resource=result.resource;
         if(auto* n=result.resource->instantiate()) i.state->root_id=n->get_instance_id();
     }
     if(!mount(i)) i.state->status=UIStatus::Failed;
@@ -88,7 +88,7 @@ void UICenter::start(Instance& i) {
 bool UICenter::mount(Instance& i) {
     auto* root=node(i.state->root_id); auto* t=tree();
     if(!root || root->is_queued_for_deletion() || !t || !t->get_root()) { i.state->error="Cannot instantiate UI scene or SceneTree is unavailable"; return false; }
-    auto* layer=memnew(CanvasLayer); layer->set_name("MeowodyUI"); layer->set_process_mode(Node::PROCESS_MODE_ALWAYS);
+    auto* layer=memnew(CanvasLayer); layer->set_name("MeowodyUI"); layer->set_process_mode(suspended ? Node::PROCESS_MODE_DISABLED : Node::PROCESS_MODE_ALWAYS);
     i.layer=layer->get_instance_id(); t->get_root()->add_child(layer); i.order=next_order++;
     if(auto* focus=t->get_root()->gui_get_focus_owner()) i.focus=focus->get_instance_id();
     if(i.config->options.kind==UIKind::Modal) { auto* mask=memnew(ColorRect); layer->add_child(mask); mask->set_color(Color(0,0,0,0.45)); mask->set_anchors_and_offsets_preset(Control::PRESET_FULL_RECT); mask->set_mouse_filter(Control::MOUSE_FILTER_STOP); }
@@ -159,7 +159,7 @@ void UICenter::retire(const std::shared_ptr<Instance>& i,bool cache_allowed) {
     if(auto* root=node(root_id)) {
         if(auto* c=Object::cast_to<Control>(root)) c->hide(); root->set_process_mode(Node::PROCESS_MODE_DISABLED);
         if(root->get_parent()) root->get_parent()->remove_child(root);
-        if(cache_allowed && !stopped && capacity && i->config->options.cache && !root->is_queued_for_deletion()) cache.push_back({i->path,root_id}); else dispose(root_id,stopped);
+        if(cache_allowed && !stopped && capacity && i->config->options.cache && !root->is_queued_for_deletion()) cache.push_back({i->path,root_id,i->resource}); else dispose(root_id,stopped);
     }
     dispose(i->layer,stopped); i->layer=0; i->state->percent=100;
     if(i->focus) restore_focus=i->focus;
@@ -184,7 +184,7 @@ bool UICenter::back() {
     return target && close(target->state->id);
 }
 void UICenter::update(double delta) {
-    if(stopped || busy) return; busy=true;
+    if(stopped || busy || suspended) return; busy=true;
     auto snapshot=instances;
     retired.clear(); if(!std::isfinite(delta)||delta<0) delta=0;
     for(auto& i:snapshot) {
@@ -195,9 +195,9 @@ void UICenter::update(double delta) {
         else if(s.status==UIStatus::Loading && !s.close_requested) {
             s.percent=s.root_id?100:i->load.progress_percent();
             if(s.root_id || i->load.is_finished()) {
-                if(!s.root_id) { auto result=i->load.result(); if(result) { if(auto* n=result.resource->instantiate()) s.root_id=n->get_instance_id(); } else s.error=result.message; }
+                if(!s.root_id) { auto result=i->load.result(); if(result) { i->resource=result.resource; if(auto* n=result.resource->instantiate()) s.root_id=n->get_instance_id(); } else s.error=result.message; }
                 if(!s.root_id || !mount(*i)) s.status=UIStatus::Failed;
-                i->load={};
+
             }
         }
         if(i->attached && !node(s.root_id)) { s.status=UIStatus::Failed; s.error="UI root was removed externally"; }
@@ -221,6 +221,11 @@ void UICenter::update(double delta) {
 }
 void UICenter::evict() { while(cache.size()>capacity) { auto item=cache.front(); cache.pop_front(); dispose(item.root,stopped); } }
 void UICenter::clear_cache() { auto old=capacity; capacity=0; evict(); capacity=old; }
+void UICenter::set_suspended(bool value) {
+    if(stopped || suspended==value) return;
+    suspended=value;
+    for(auto& i:instances) if(auto* layer=node(i->layer)) layer->set_process_mode(value ? Node::PROCESS_MODE_DISABLED : Node::PROCESS_MODE_ALWAYS);
+}
 void UICenter::shutdown() { if(stopped) return; stopped=true; scene_connection.disconnect(); if(!busy) drain_shutdown(); }
 void UICenter::drain_shutdown() {
     auto pending=instances;

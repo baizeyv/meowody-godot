@@ -156,13 +156,24 @@ public:
             auto fake = std::make_unique<FakeResources>();
             auto *backend = fake.get();
             ResourceCenter resources(std::move(fake));
-            for (int i = 0; i < 128; ++i) resources.load_async<>("res://pending_" + String::num_int64(i) + ".tres");
+            String config = "{\"schema\":1,\"entries\":[";
+            for (int i = 0; i < 130; ++i) {
+                if (i) config += ",";
+                String address = i < 128 ? "pending_" + String::num_int64(i) : i == 128 ? "first" : "next";
+                config += "{\"address\":\"" + address + "\",\"path\":\"res://" + address + ".tres\"}";
+            }
+            config += "]}";
+            auto settings = FileAccess::open("user://resource_perf.json", FileAccess::WRITE);
+            settings->store_string(config); settings.unref();
+            ResourceOptions resource_options; resource_options.mode = ResourceMode::Source; resource_options.settings_path = "user://resource_perf.json";
+            check(resources.initialize(resource_options).succeeded(), "source resource catalog initialized");
+            for (int i = 0; i < 128; ++i) resources.load_async<>("pending_" + String::num_int64(i));
             benchmark("resource_128_pending", [&] { resources.update(); });
             backend->finished = true;
             int delivered = 0;
-            resources.load_async<>("res://first.tres", [&](const LoadResult<> &) {
+            resources.load_async<>("first", [&](const LoadResult<> &) {
                 ++delivered;
-                resources.load_async<>("res://next.tres", [&](const LoadResult<> &) { ++delivered; });
+                resources.load_async<>("next", [&](const LoadResult<> &) { ++delivered; });
                 resources.update();
             });
             resources.update(); check(delivered == 1, "resource callback enqueue deferred");

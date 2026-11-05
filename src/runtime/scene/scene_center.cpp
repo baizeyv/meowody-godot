@@ -36,13 +36,12 @@ SceneHandle SceneCenter::begin(LoadHandle<PackedScene> load, SceneOptions option
     m_job = job; return job->handle;
 }
 SceneHandle SceneCenter::switch_to(const String& path, SceneOptions options, Delegate<void(const SceneResult&)> callback) {
-    return begin(m_closed || is_switching() ? LoadHandle<PackedScene>{} : m_resources.load_async<PackedScene>(path), options, std::move(callback));
-}
-SceneHandle SceneCenter::switch_pack(const String& url, const String& entry, SceneOptions options, Delegate<void(const SceneResult&)> callback) {
-    return begin(m_closed || is_switching() ? LoadHandle<PackedScene>{} : m_resources.load_pack_async<PackedScene>(url, entry), options, std::move(callback));
+    auto result = begin(m_closed || is_switching() ? LoadHandle<PackedScene>{} : m_resources.load_async<PackedScene>(path), options, std::move(callback));
+    if (m_job && m_job->handle.m_state == result.m_state) m_job->address = path;
+    return result;
 }
 SceneHandle SceneCenter::reload(SceneOptions options, Delegate<void(const SceneResult&)> callback) {
-    auto* current = current_scene(); return switch_to(current ? current->get_scene_file_path() : String(), options, std::move(callback));
+    return switch_to(m_current_address, options, std::move(callback));
 }
 void SceneCenter::finish(Job& job, SceneStatus status, const String& message) {
     auto& state = *job.handle.m_state; state.status = status; state.result.message = message;
@@ -82,6 +81,7 @@ void SceneCenter::update(double delta) {
             } else {
                 auto* current = current_scene();
                 if (current && current->get_instance_id() == job->next_scene) {
+                    m_current_address = job->address; m_current_resource = job->load;
                     s.result.scene_id = job->next_scene; s.status = SceneStatus::FadingIn; job->elapsed = 0;
                 } else if (current || !ObjectDB::get_instance(job->next_scene)) finish(*job, SceneStatus::Failed, "Target scene was removed or replaced externally");
             }
@@ -97,7 +97,7 @@ void SceneCenter::update(double delta) {
 void SceneCenter::shutdown() {
     if (m_closed) return; m_closed = true;
     if (m_job) { m_job->load.cancel(); finish(*m_job, SceneStatus::Cancelled, "SceneCenter closed"); }
-    m_job.reset(); m_delivery.clear(); notifications.clear_all();
+    m_job.reset(); m_current_resource = {}; m_delivery.clear(); notifications.clear_all();
     if (auto* layer = Object::cast_to<Node>(ObjectDB::get_instance(m_layer))) memdelete(layer);
     m_layer = 0; m_rect = 0;
 }

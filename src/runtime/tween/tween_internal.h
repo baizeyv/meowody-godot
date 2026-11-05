@@ -67,6 +67,7 @@ namespace meowody::tween::detail
 			   compiled = false, started = false;
 		bool   nested = false, busy = false, cancelled_tracks = false,
 			   initial_events = true, claimed = false;
+		bool skip_driver_tick = false;
 		godot::Variant						  from, to;
 		Delegate<godot::Variant()>			  getter;
 		Delegate<void(const godot::Variant&)> setter;
@@ -82,7 +83,7 @@ namespace meowody::tween::detail
 	};
 	struct Core
 	{
-		bool								stopped = false, updating = false;
+		bool								stopped = false, updating = false, suspended = false;
 		uint64_t							next_id = 1;
 		std::vector<std::shared_ptr<State>> active;
 	};

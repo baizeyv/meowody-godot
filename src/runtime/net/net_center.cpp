@@ -33,7 +33,10 @@ NetHandle NetCenter::post_json(const String& url, const String& json, Delegate<v
     NetRequestOptions o; o.url = url; o.method = HTTPClient::METHOD_POST; o.headers.append("Content-Type: application/json"); o.body = json.to_utf8_buffer(); return request(std::move(o), std::move(callback));
 }
 size_t NetCenter::pending_count() const { size_t n = 0; for (auto& j : m_jobs) if (j->state->status == NetRequestStatus::Pending || j->state->status == NetRequestStatus::Running) ++n; return n; }
-void NetCenter::cancel_all() { for (auto& j : m_jobs) { NetHandle h; h.m_state = j->state; h.cancel(); } }
+void NetCenter::cancel_all() {
+    for (auto& j : m_jobs) { NetHandle h; h.m_state = j->state; h.cancel(); }
+    for (auto& j : m_delivery) { NetHandle h; h.m_state = j->state; h.cancel(); }
+}
 bool NetCenter::configure_monitor(const String& url, double interval, int failures) {
     if (m_closed || (!url.is_empty() && !detail::parse_http_url(url).valid()) || !std::isfinite(interval) || interval < 1 || failures < 1) return false;
     m_probe.cancel(); m_probe = {}; m_snapshot.probe_url = url; m_snapshot.consecutive_failures = 0;
@@ -68,10 +71,10 @@ void NetCenter::monitor(double now) {
     }
 }
 void NetCenter::update() {
-    if (m_closed || m_updating) return;
+    if (m_closed || m_updating || m_suspended) return;
     m_updating = true; struct Guard { bool& f; ~Guard() { f = false; } } guard{m_updating};
     double now = Time::get_singleton()->get_ticks_usec() / 1000000.0;
-    std::vector<std::shared_ptr<detail::NetJob>> done;
+    auto done = std::move(m_delivery); m_delivery.clear();
     size_t running = 0;
     for (auto& j : m_jobs) if (j->state->status == NetRequestStatus::Running) ++running;
     std::erase_if(m_jobs, [&](const auto& j) {
@@ -87,8 +90,8 @@ void NetCenter::update() {
     std::optional<decltype(m_listeners)> listeners;
     if (m_changed) listeners.emplace(m_listeners);
     bool changed = m_changed; m_changed = false; auto snapshot = m_snapshot;
-    for (auto& j : done) { if (m_closed) break; if (!j->state->suppress && j->callback) j->callback(j->state->result); }
-    if (changed) for (auto& [id, cb] : *listeners) { if (m_closed) break; if (m_listeners.contains(id)) (*cb)(snapshot); }
+    for (auto& j : done) { if (m_closed) break; if (m_suspended) { m_delivery.push_back(j); continue; } if (!j->state->suppress && j->callback) j->callback(j->state->result); }
+    if (changed) for (auto& [id, cb] : *listeners) { if (m_closed) break; if (m_suspended) { m_changed = true; break; } if (m_listeners.contains(id)) (*cb)(snapshot); }
 }
-void NetCenter::shutdown() { if (m_closed) return; m_closed = true; cancel_all(); m_probe.cancel(); m_jobs.clear(); m_listeners.clear(); }
+void NetCenter::shutdown() { if (m_closed) return; m_closed = true; cancel_all(); m_probe.cancel(); m_jobs.clear(); m_delivery.clear(); m_listeners.clear(); }
 }

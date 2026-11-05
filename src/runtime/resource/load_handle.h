@@ -25,6 +25,14 @@ public:
         return detail::typed_result<T>(m_state->result);
     }
     void cancel() const { if (m_state) m_state->cancel(); }
+    // Copies share this request. Releasing any copy releases its resource for all copies.
+    void release() const
+    {
+        if (!m_state) return;
+        m_state->cancel();
+        m_state->status = LoadStatus::Cancelled;
+        m_state->result = {{}, LoadError::Released, godot::OK, "Resource handle released"};
+    }
 
 private:
     friend class ResourceCenter;

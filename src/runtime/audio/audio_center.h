@@ -2,6 +2,7 @@
 #include "audio_types.h"
 #include "runtime/core/delegate.hpp"
 #include <map>
+#include <vector>
 #include <godot_cpp/variant/packed_string_array.hpp>
 namespace godot { class AudioStreamPlayer; }
 namespace meowody {
@@ -18,6 +19,8 @@ public:
     bool set_volume(const godot::String& channel, float volume);
     bool set_muted(const godot::String& channel, bool muted);
     bool set_paused(const godot::String& channel, bool paused);
+    void set_suspended(bool suspended);
+    bool is_suspended() const { return m_suspended; }
     AudioChannelOptions channel_options(const godot::String& channel) const;
     bool fade_volume(const godot::String& channel, float target, double seconds);
     AudioHandle play(const godot::String& channel, const godot::Ref<godot::AudioStream>& stream,
@@ -36,8 +39,9 @@ private:
     };
     std::map<godot::String, Channel> m_channels;
     std::map<uint64_t, std::shared_ptr<Voice>> m_voices;
+    std::vector<std::shared_ptr<Voice>> m_delivery;
     uint64_t m_root = 0;
-    bool m_closed = false, m_updating = false;
+    bool m_closed = false, m_updating = false, m_suspended = false;
     bool ensure_root();
     void apply(Voice& voice, godot::AudioStreamPlayer* player = nullptr);
 };

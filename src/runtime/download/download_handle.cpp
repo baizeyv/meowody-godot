@@ -14,11 +14,17 @@ DownloadResult DownloadHandle::result() const
 }
 void DownloadHandle::pause() const
 {
-    if (m_state && !finished()) m_state->status = DownloadStatus::Paused;
+    if (m_state && !finished()) {
+        m_state->manual_paused = true;
+        m_state->status = DownloadStatus::Paused;
+    }
 }
 void DownloadHandle::resume() const
 {
-    if (m_state && status() == DownloadStatus::Paused) m_state->status = DownloadStatus::Queued;
+    if (m_state && !finished()) {
+        m_state->manual_paused = false;
+        if (!m_state->lifecycle_paused && status() == DownloadStatus::Paused) m_state->status = DownloadStatus::Queued;
+    }
 }
 void DownloadHandle::cancel() const
 {

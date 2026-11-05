@@ -3,19 +3,22 @@ namespace meowody {
 BatchLoadHandle ResourceCenter::preload_group(const godot::String& group, const std::vector<godot::String>& paths,
                                             Delegate<void(const BatchLoadHandle&)> callback)
 {
-    return create_batch(group, paths, {}, std::move(callback));
+    return create_batch(group, paths, std::move(callback));
 }
-BatchLoadHandle ResourceCenter::preload_pack_group(const godot::String& group, const godot::String& pack_url,
-                                                  const std::vector<godot::String>& entries,
-                                                  Delegate<void(const BatchLoadHandle&)> callback)
+BatchLoadHandle ResourceCenter::preload_group(const godot::String& group, Delegate<void(const BatchLoadHandle&)> callback)
 {
-    return create_batch(group, entries, pack_url, std::move(callback), true);
+    return create_batch(group, m_catalog->select(group, false), std::move(callback));
+}
+BatchLoadHandle ResourceCenter::preload_label(const godot::String& label, Delegate<void(const BatchLoadHandle&)> callback)
+{
+    return create_batch("label:" + label, m_catalog->select(label, true), std::move(callback));
 }
 BatchLoadHandle ResourceCenter::create_batch(const godot::String& group, const std::vector<godot::String>& paths,
-                                            const godot::String& pack_url, Delegate<void(const BatchLoadHandle&)> callback, bool is_pack)
+                                            Delegate<void(const BatchLoadHandle&)> callback)
 {
     auto batch = std::make_shared<detail::BatchState>();
     batch->group = group;
+    if (!m_catalog->ready()) { batch->status = LoadStatus::Failed; return BatchLoadHandle(batch); }
     if (m_closed)
     {
         for (const auto& path : paths) batch->items.push_back(load_async<>(path));
@@ -27,8 +30,8 @@ BatchLoadHandle ResourceCenter::create_batch(const godot::String& group, const s
     batch->generation = entry->second.generation;
     for (const auto& path : paths)
     {
-        batch->paths.push_back(is_pack ? pack_key(pack_url, path) : normalize(path));
-        batch->items.push_back(is_pack ? load_pack_async<>(pack_url, path) : load_async<>(path));
+        batch->paths.push_back(normalize(path));
+        batch->items.push_back(load_async<>(path));
     }
     if (callback)
         batch->callback = [weak = std::weak_ptr(batch), fn = std::move(callback)]() mutable {

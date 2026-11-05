@@ -24,11 +24,13 @@ public:
     bool set_max_concurrent(size_t count) { if (m_closed || count == 0) return false; m_max_concurrent = count; return true; }
     size_t max_concurrent() const { return m_max_concurrent; }
     void cancel_all();
+    void set_suspended(bool suspended) { m_suspended = suspended; }
     void update();
     void shutdown();
     bool is_closed() const { return m_closed; }
 private:
     std::vector<std::shared_ptr<detail::NetJob>> m_jobs;
+    std::vector<std::shared_ptr<detail::NetJob>> m_delivery;
     std::map<uint64_t, std::shared_ptr<Delegate<void(const NetSnapshot&)>>> m_listeners;
     Delegate<bool()> m_interface_check;
     NetSnapshot m_snapshot;
@@ -38,6 +40,7 @@ private:
     uint64_t m_next_id = 1;
     size_t m_max_concurrent = 8;
     bool m_closed = false, m_updating = false, m_changed = false;
+    bool m_suspended = false;
     void monitor(double now);
     void set_status(NetStatus status);
 };

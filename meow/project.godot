@@ -26,7 +26,7 @@ window/stretch/mode="canvas_items"
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/meowody_binding/plugin.cfg", "res://addons/meowody_debug/plugin.cfg", "res://addons/meowody_atlas/plugin.cfg", "res://addons/meowody_multipatch/plugin.cfg", "res://addons/meowody_nodes/plugin.cfg", "res://addons/meowody_mcp/plugin.cfg")
+enabled=PackedStringArray("res://addons/meowody_binding/plugin.cfg", "res://addons/meowody_debug/plugin.cfg", "res://addons/meowody_atlas/plugin.cfg", "res://addons/meowody_multipatch/plugin.cfg", "res://addons/meowody_nodes/plugin.cfg", "res://addons/meowody_mcp/plugin.cfg", "res://addons/meowody_resources/plugin.cfg")
 
 [rendering]
 

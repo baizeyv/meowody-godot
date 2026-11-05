@@ -43,6 +43,11 @@ bool AudioCenter::set_paused(const String& name, bool paused) {
     auto it = m_channels.find(name); if (m_closed || it == m_channels.end()) return false;
     it->second.options.paused = paused; for (auto& [id, v] : m_voices) if (v->channel == name) apply(*v); return true;
 }
+void AudioCenter::set_suspended(bool suspended) {
+    if (m_closed || m_suspended == suspended) return;
+    m_suspended = suspended;
+    for (auto& [id, voice] : m_voices) apply(*voice);
+}
 bool AudioCenter::fade_volume(const String& name, float target, double seconds) {
     auto it = m_channels.find(name); if (m_closed || it == m_channels.end() || !std::isfinite(target) || target < 0 || target > 1 || !std::isfinite(seconds) || seconds < 0) return false;
     if (!seconds) return set_volume(name, target);
@@ -58,7 +63,7 @@ void AudioCenter::apply(Voice& voice, AudioStreamPlayer* p) {
         p->set_volume_linear(volume);
         voice.applied_volume = volume; voice.applied_db = p->get_volume_db();
     }
-    const bool paused = c.paused || state.paused;
+    const bool paused = m_suspended || c.paused || state.paused;
     if (p->get_stream_paused() != paused) p->set_stream_paused(paused);
     state.status = paused ? VoiceStatus::Paused : VoiceStatus::Playing;
 }
@@ -85,14 +90,14 @@ void AudioCenter::stop_channel(const String& channel) { for (auto& [id, v] : m_v
 void AudioCenter::stop_all() { for (auto& [id, v] : m_voices) v->handle.stop(); }
 bool AudioCenter::remove_channel(const String& name) { if (m_closed || !has_channel(name)) return false; stop_channel(name); m_channels.erase(name); return true; }
 void AudioCenter::update(double delta) {
-    if (m_closed || m_updating) return;
+    if (m_closed || m_updating || m_suspended) return;
     m_updating = true; struct Guard { bool& v; ~Guard() { v = false; } } guard{m_updating};
     if (!std::isfinite(delta) || delta < 0) delta = 0;
     for (auto& [name, c] : m_channels) if (c.duration > 0) {
         c.elapsed = std::min(c.duration, c.elapsed + delta); c.options.volume = c.from + (c.target - c.from) * (c.elapsed / c.duration);
         if (c.elapsed >= c.duration) c.duration = 0;
     }
-    std::vector<std::shared_ptr<Voice>> done;
+    auto done = std::move(m_delivery); m_delivery.clear();
     for (auto it = m_voices.begin(); it != m_voices.end();) {
         auto& voice = *it->second; auto* p = player(it->first);
         if (!p && !voice.handle.is_finished()) voice.handle.m_state->status = VoiceStatus::Stopped;
@@ -103,10 +108,10 @@ void AudioCenter::update(double delta) {
         if (voice.handle.is_finished()) { if (p) p->queue_free(); done.push_back(it->second); it = m_voices.erase(it); }
         else ++it;
     }
-    for (auto& v : done) { if (m_closed) break; if (v->handle.status() == VoiceStatus::Finished && v->callback) v->callback(); }
+    for (auto& v : done) { if (m_closed) break; if (m_suspended) { m_delivery.push_back(v); continue; } if (v->handle.status() == VoiceStatus::Finished && v->callback) v->callback(); }
 }
 void AudioCenter::shutdown() {
-    if (m_closed) return; m_closed = true; stop_all(); m_voices.clear(); m_channels.clear();
+    if (m_closed) return; m_closed = true; stop_all(); m_voices.clear(); m_delivery.clear(); m_channels.clear();
     if (auto* root = Object::cast_to<Node>(ObjectDB::get_instance(m_root))) memdelete(root);
     m_root = 0;
 }

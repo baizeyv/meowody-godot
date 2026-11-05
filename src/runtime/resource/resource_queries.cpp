@@ -24,7 +24,6 @@ bool ResourceCenter::cancel_key(const godot::String& key)
     return found;
 }
 bool ResourceCenter::cancel(const godot::String& path) { return cancel_key(normalize(path)); }
-bool ResourceCenter::cancel_pack(const godot::String& url, const godot::String& entry) { return cancel_key(pack_key(url, entry)); }
 void ResourceCenter::cancel_all()
 {
     for (const auto& state : m_requests) state->cancel();

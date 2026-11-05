@@ -35,6 +35,7 @@ namespace meowody
 		bool stop(CoroutineId p_id) noexcept;
 
 		void update(double p_delta_time);
+		void set_suspended(bool value) { m_suspended = value; }
 
 		void clear() noexcept;
 
@@ -69,6 +70,7 @@ namespace meowody
 	  private:
 		double			  m_delta_time = 0.0;
 		bool m_updating = false;
+		bool m_suspended = false;
 		std::vector<Slot> m_slots;
 		std::uint32_t	  m_free_head	 = invalid_index();
 		std::size_t		  m_active_count = 0;

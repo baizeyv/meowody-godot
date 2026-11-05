@@ -10,6 +10,7 @@ Meowody 是 Godot 4.7 的 C++20 GDExtension 框架。它把常用运行服务、
 - [项目创建器](#project-creator)
 - [项目结构、资源路径与命名](#layout)
 - [App 与生命周期](#app)
+  - [前后台、低内存与退出](#application-lifecycle)
 - [构建选项和热重载](#build-options)
 - [反射与 codegen](#reflection)
 - [基础工具：Connection、Delegate、TypeToken](#core)
@@ -21,7 +22,7 @@ Meowody 是 Godot 4.7 的 C++20 GDExtension 框架。它把常用运行服务、
 - [CoroutineCenter：帧协程](#coroutine)
 - [TweenCenter：补间与 Sequence](#tween)
 - [DownloadCenter：下载、续传与缓存](#download)
-- [ResourceCenter：本地、远程与资源包](#resource)
+- [ResourceCenter：Addressables 资源管理](#resource)
 - [SaveCenter：存档、资源导出与加密](#save)
 - [PoolCenter：节点与场景池](#pool)
 - [TimeCenter：日历、校时与每日订阅](#time)
@@ -164,12 +165,79 @@ GDExtension 初始化已调用 App::initialize，App 自动挂到 SceneTree 根�
 ```cpp
 #include "runtime/app.h"
 auto &resources = meowody::App::resource;
-auto result = resources->load<godot::PackedScene>("res://scenes/player.tscn");
+auto result = resources->load<godot::PackedScene>("scenes/player");
 ```
 
 旧 `Runtime::resources()` / `Runtime::saves()` 接口已不属于当前代码。更新顺序为 MainThread → Time → Download → Resource → Net → Audio → Scene → UI → Debug；延迟 late_process 提交 Tween、推进 Coroutine 并合并 Save 写盘。Godot Tween 自己推进时钟。
 
 Connection、订阅、协程与请求句柄的生命周期各不相同：必须持有 RAII Connection；不要把裸 Node 指针带到节点销毁之后；取消是否抑制回调请看对应模块。中心 API 默认在主线程使用。MainThreadCenter::post、TaskCenter::submit 及它们的句柄查询／取消支持跨线程；其它服务不因此获得线程安全。App 退出先关闭 UI 和 System，取消并等待 Task 工作线程退出、丢弃 MainThread 待执行回调，再释放 System 与其余中心。独立构造的中心需要自己安排驱动和关闭。
+
+<a id="application-lifecycle"></a>
+### 前后台、低内存与退出
+
+生命周期由现有 App 管理，不需要额外注册服务。`App::get_singleton()->application_state()` 返回状态副本：`focused`、`system_paused`、`minimized`、`background`、`game_paused` 和 `quitting`。接口、状态查询及事件订阅均在主线程使用。
+
+| 情况 | 默认行为 |
+| --- | --- |
+| 普通失焦／重新聚焦 | 更新输入焦点和 FocusChanged 事件，不暂停游戏或音频 |
+| Android/iOS 后台／Windows 主窗口最小化 | 两种原因独立记录，任一存在即进入后台；无窗口运行不采用最小化策略 |
+| 进入后台 | 暂停场景树、框架协程与补间、UI 动画、音频和下载；通知业务保存后同步提交待保存数据 |
+| 恢复前台 | 只撤销生命周期暂停，保留原有手动暂停；恢复网络监测和回调交付，首帧跳过游戏时间推进 |
+| 系统低内存通知 | 通知业务并提交存档，清空 LRU、已关闭 UI 缓存及对象池闲置节点；保留活跃对象、预加载组和磁盘文件 |
+| 返回请求 | 先尝试 UICenter.back，未处理时交给业务；未消费则进入退出请求 |
+| 窗口关闭请求 | 交给业务拦截；未消费时保存并退出，保存失败阻止退出 |
+
+`ApplicationEvent` 通过已有 EventCenter 发送，事件种类为 FocusChanged、Suspended、Resumed、LowMemory、Quitting。`state` 是事件发生时的状态副本；Resumed 还带有单调时钟计算的 `background_seconds`。Quitting 是最终保存前的通知，此时尚未确认退出成功，`state.quitting` 仍可能为 false。
+
+```cpp
+#include "runtime/app.h"
+using namespace meowody;
+
+// Connection 必须由场景、Presenter 或 System 持有，不能作为临时对象丢弃。
+auto lifecycle_connection = App::event->connect<ApplicationEvent>(
+    [](const ApplicationEvent& event) {
+        if (event.kind == ApplicationEventKind::Suspended ||
+            event.kind == ApplicationEventKind::LowMemory ||
+            event.kind == ApplicationEventKind::Quitting) {
+            godot::Dictionary settings;
+            settings["music_volume"] = App::audio->channel_options("Music").volume;
+            App::save->save("settings", "main", settings);
+            // 在这里 save_model(...) 保存业务 Model；框架不会自动遍历和序列化它们。
+        }
+        if (event.kind == ApplicationEventKind::Resumed) {
+            // 按 event.background_seconds 刷新离线收益等业务，游戏动画不补算这段时间。
+        }
+    });
+
+auto request_connection = App::event->connect<ApplicationRequest>(
+    [](const ApplicationRequest& request) {
+        if (request.is_consumed()) return;
+        if (request.kind == ApplicationRequestKind::Quit) {
+            request.consume();
+            // 打开自己的确认窗口。用户确认后调用 App::get_singleton()->quit()。
+        }
+    });
+
+auto save_error_connection = App::event->connect<ApplicationSaveFailed>(
+    [](const ApplicationSaveFailed& failure) {
+        // failure.reason 区分 Suspend、LowMemory、Quit，failure.status 保留写盘错误。
+        // 后台和低内存失败不会阻止系统挂起，未提交数据仍留在 SaveCenter。
+    });
+```
+
+使用 `App::get_singleton()->set_game_paused(true/false)` 改变手动暂停意图。进入后台前已经直接暂停的 SceneTree 会保持暂停；后台期间若要改变这个意图，需要使用 App 接口，单独对 SceneTree.set_pause 写入同一个布尔值无法表达暂停所有权。音频通道、声音句柄、补间句柄和下载句柄的手动暂停分别保留；手动 resume 不能绕过后台暂停，后台新建的音频、补间和下载同样暂停。
+
+App 在后台不推进普通服务回调；Task 工作线程可以继续完成计算，其主线程结果等待恢复后交付。当前已经进入的业务回调不会被强行中断。TimeCenter 的系统时间、单调时间和日历不冻结，恢复后按原有每日订阅规则处理；HTTP 请求不会自动重发。使用 PROCESS_MODE_ALWAYS 的业务节点仍需自行遵守后台状态。手动推进独立构造的中心时，调用方负责配套的暂停和恢复。
+
+`request_back()` 和 `request_quit()` 发送可消费的请求；确认后 `quit()` 通知业务保存并调用 flush_pending，返回 false 表示退出未被接受。保存失败会发出 ApplicationSaveFailed 并保留待提交数据，可重试 `quit()`；明确接受数据丢失时才能调用 `quit(true)` 强制退出。直接调用 SceneTree.quit 会绕过以上拦截和最终保存。框架不提供确认弹窗，也不能阻止操作系统终止进程；移动端暂停通知中只做短时同步保存，不等待网络。
+
+App 在运行时接管 SceneTree 的自动关闭与返回退出设置，关闭时恢复其持有的设置；编辑器模式不接管窗口或暂停编辑器。原有服务关闭顺序保持不变。
+
+```powershell
+python tests/run_lifecycle_test.py --godot "D:/path/to/Godot-console.exe" --visual
+```
+
+隔离测试覆盖暂停所有权、重复和重入通知、恢复首帧、业务保存顺序、退出失败／强制退出、闲置缓存清理及真实 HTTP Range/If-Range 续传。`--visual` 只操作校验过进程身份的测试窗口，验证 Windows 最小化、恢复和标题栏关闭。移动端通知通过模拟验证，Android/iOS 真机仍需对应设备。当前 tests 忽略规则会使新增测试仅保留在本地，提交时需单独纳入版本控制。
 
 <a id="build-options"></a>
 ## 构建选项和热重载
@@ -3189,284 +3257,118 @@ flow << meowody::wait_for_download(handle) << [handle] {
 
 
 <a id="resource"></a>
-## ResourceCenter：本地、远程与资源包
+## ResourceCenter：Addressables 资源管理
 
-实现位置：`src/runtime/resource/`。
-
-
-### 模块说明
-
-
-帧驱动的 C++ 资源中心，保留 `resource_center.h` 与 `meowody::App::resource` 入口。
-
-- 本地同步/异步加载、类型验证、回调、独立取消和协程等待。
-- HTTP(S) 图片、音频、自包含 Godot 资源加载。
-- 通过下载 PCK/ZIP 加载远程场景和包内依赖。
-- 分组预加载与显式释放；非分组资源使用默认 128 项的 LRU。
-- 句柄、批次与 Center 均提供进度百分比和完成状态查询。
-
-完整教程：[TUTORIAL.md](#resource)。下载与续传教程：[DownloadCenter](#download)。
-
-| 文件 | 职责 |
-| --- | --- |
-| `resource_center.*` | 公共入口、更新和生命周期 |
-| `resource_loading.cpp`、`resource_sync.cpp` | 异步任务和同步加载 |
-| `resource_groups.cpp`、`resource_queries.cpp` | 批次、分组、进度查询和控制 |
-| `resource_path.cpp` | 本地/远程路径与包入口身份 |
-| `resource_backend.*` | Godot ResourceLoader 适配和测试替身接口 |
-| `remote_resource_loader.*` | 媒体解码、资源包挂载 |
-| `resource_cache.*` | 非分组资源 LRU |
-| `load_types.h`、`load_progress.h` | 状态、结果与轻量进度快照 |
-| `load_handle.*`、`batch_load_handle.*` | 请求/批次句柄 |
-| `detail/` | 内部请求、批次和加载任务状态 |
-| `wait_for_resource.h` | 协程等待 |
-
-App 节点 自动执行下载 → 资源，随后在 deferred late_process 中推进协程。业务无需调用 update。
-
-迁移注意：普通成功请求现在进入 LRU；需要旧版不常驻行为时调用 `set_lru_capacity(0)`。`get_cached()` 同时查询组和 LRU，资源释放不等于磁盘文件删除或资源包卸载。进度 100% 也可能是失败或取消，必须检查成功状态。
-
-资源验证场景按业务建立；当前仓库提供的隔离测试脚本见[验证章节](#verification)。
-
-
-### 使用教程
-
+入口仍为 `meowody::App::resource`。业务以配置地址加载，物理路径、平台资源包和远程 URL 由目录解析。编辑器主界面的 **Resources** 页负责分组、地址、标签、Profile、分析和构建。配置保存在 `res://resources/settings.json`，应提交版本控制；生成目录和资源包属于构建产物。
 
 <a id="resource-1-1"></a>
-### 1. 入口与驱动
+### 初始化与启动
+
+App 启动时调用 `initialize()`。编辑器默认根据配置直接加载源资源；Resources 页可切换真实包模式。发布版本读取内置目录，检查远程版本，下载启动必需包后固定本次运行的目录。
 
 ```cpp
-#include "runtime/app.h"
-
-auto& resources = meowody::App::resource;
-// App 节点 自动更新，无需业务帧驱动。
+auto init = meowody::App::resource->initialize(); // 重复调用取得同一初始化操作
+flow << meowody::wait_for_resource_operation(init) << [init] {
+    if (!init.succeeded()) return; // 在启动 UI 展示 init.message()，允许重试
+    // 现在可以进入业务；init.used_fallback() 表示使用了本地/内置版本。
+};
 ```
 
-Runtime 依次推进下载、资源与协程。独立创建 `ResourceCenter` 时，它拥有自己的 DownloadCenter，`resources->update()` 会一起驱动下载；若用 `ResourceCenter(downloads)` 注入外部下载中心，应每帧先调用 `downloads.update()`，再调用 `resources->update()`，并保证下载中心后销毁。
-
-全部接口为主线程 C++ API，不要求 GDScript 绑定。原来的 `resource_center.h` 仍是完整入口，也可单独包含 `load_handle.h`、`batch_load_handle.h`、`load_types.h`。
-
+独立中心需要主动调用 `initialize(options)` 和每帧 `update()`。注入 DownloadCenter 时先更新下载中心；默认构造则自动推进自有下载中心。初始化与业务加载均属于主线程 API。
 
 <a id="resource-1-2"></a>
-### 2. 本地同步加载
+### 配置与地址加载
+
+在 Resources 页创建分组，将文件系统中的资源拖入列表，编辑唯一地址和逗号分隔的标签。每个资源只能登记一次；UID 用于跟随文件移动，构建时会校验地址、路径和分组。Profile 提供远程根地址、项目外的输出目录，以及 Windows / Android / iOS 的导出预设名称。
 
 ```cpp
-#include <godot_cpp/classes/packed_scene.hpp>
-
-auto result = resources->load<godot::PackedScene>("res://scenes/player.tscn");
+auto& resources = meowody::App::resource;
+auto result = resources->load<godot::PackedScene>("scenes/player");
 if (result) {
-    godot::Ref<godot::PackedScene> scene = result.resource;
-} else {
-    // result.error、result.godot_error、result.message
+    auto* player = result.resource->instantiate();
 }
 ```
 
-模板类型必须继承 Godot Resource，默认类型为 `godot::Resource`。支持 `res://`、`user://`、已登记 UID，以及补 `res://` 的相对路径。类型检查使用 Godot 类型转换，不依赖 C++ RTTI。
-
-同步调用可能阻塞。同路径已有本地异步任务时会接管其结果，已登记异步回调仍在更新时交付。
-
+以上地址必须事先登记。同步加载只接受源资源或依赖包已经缓存的地址；缺少包返回 `RemoteRequiresAsync`，不会阻塞网络。
 
 <a id="resource-1-3"></a>
-### 3. 异步加载与回调
+### 异步加载和释放
 
 ```cpp
-auto handle = resources->load_async<godot::PackedScene>(
-    "res://scenes/player.tscn",
+auto handle = resources->load_async<godot::PackedScene>("scenes/player",
     [](const meowody::LoadResult<godot::PackedScene>& result) {
-        if (!result) return;
-        // result.resource 可用。
+        if (result) { /* 使用资源 */ }
     });
+// handle.cancel() 只取消当前请求，不影响相同地址的其他请求。
+// 不再需要时释放，或让句柄及其所有副本析构：
+handle.release();
 ```
 
-也可以不传回调，稍后调用 `handle.result()`。回调总在更新中交付，缓存命中不内联回调；回调中新建的请求在下次更新处理。句柄可复制且析构不取消，副本共享同一逻辑请求。
-
-相同路径共享底层加载，各请求独立类型检查和取消。`handle.cancel()` 只取消该逻辑请求；`resources->cancel(path)` 取消该路径尚在中心管理的所有逻辑请求，并抑制未交付回调。
-
-取消不破坏其他请求，也不强制中断 Godot 已提交的后台加载。远程加载取消后，下载仍可完成并留在磁盘缓存，避免影响 DownloadCenter 中共享该下载的其他调用者。
-
+复制句柄共享同一次请求，任一副本显式 release 会使其他副本的 result 返回 Released。独立加载请求分别持有资源；同地址底层加载去重。取消抑制尚未交付的回调。额外复制到业务中的 Godot Ref 仍会持有资源。
 
 <a id="resource-1-4"></a>
-### 4. 百分比和完成状态
+### 状态和查询
 
-```cpp
-float percent = handle.progress_percent(); // 0..100
-float ratio = handle.progress();           // 0..1
-bool done = handle.is_finished();          // 与 finished() 等价
-bool success = handle.succeeded();
-bool failed = handle.failed();
-bool cancelled = handle.cancelled();
-```
-
-直接从 Center 查询：
-
-```cpp
-godot::String path = "res://scenes/player.tscn";
-float percent = resources->progress_percent(path);
-bool done = resources->is_finished(path);
-auto progress = resources->query(path);
-if (progress.found && progress.succeeded()) {
-    auto scene = resources->get_cached<godot::PackedScene>(path);
-}
-```
-
-快照包含 `found`、`status`、`error`、`progress`，并有 `progress_percent()`、`finished()`、`succeeded()`。未知路径的 Center 查询为 `found=false`、未完成、0%。
-
-状态为 `Pending / Downloading / Loading / Succeeded / Failed / Cancelled`。成功、失败、取消都是终态，终态显示 100%，**不等于加载成功**。远程进度将下载映射到前 85%，本地解析阶段映射到后 15%；是阶段进度，不是预计剩余时间。未知下载长度时主要显示阶段状态，文件重下可能使进度回退。
-
-Center 对同路径查询的是最近登记的请求，包含同步调用；并发请求使用不同类型时，优先通过各自句柄取得精确结果。中心保留全部活动键及最近 128 个完成键的进度快照，不会为历史记录持有资源。LRU 已淘汰的资源可能仍显示完成，此时 `get_cached()` 可为空；原句柄的 `result()` 仍保留资源。
-
+`handle.status()/progress()/result()` 查询具体请求，中心的 `query(address)` 查询该地址最近的请求。进度完成包含成功、失败和取消，业务必须检查成功状态。未知地址返回 UnknownAddress，初始化前调用返回 NotInitialized；目录校验、下载和挂载错误通过句柄返回。
 
 <a id="resource-1-5"></a>
-### 5. 远程图片、音频与资源文件
+### 下载和磁盘缓存
 
 ```cpp
-#include <godot_cpp/classes/texture2d.hpp>
-#include <godot_cpp/classes/audio_stream.hpp>
-
-auto image = resources->load_async<godot::Texture2D>(
-    "https://cdn.example.com/v1/avatar.png");
-auto audio = resources->load_async<godot::AudioStream>(
-    "https://cdn.example.com/v1/music.ogg");
-auto data = resources->load_async<>(
-    "https://cdn.example.com/v1/settings.tres");
+auto bytes = resources->download_size("scenes/player"); // 未初始化或未知地址为 -1
+bool cached = resources->has_cached_dependencies("scenes/player");
+auto download = resources->download_dependencies("scenes/player");
+flow << meowody::wait_for_resource_operation(download);
+bool removed = resources->clear_cached_dependencies("scenes/player");
 ```
 
-| 文件类型 | 加载结果 |
-| --- | --- |
-| PNG / JPEG / WebP | ImageTexture，可作为 Texture2D 使用 |
-| MP3 / OGG / WAV | 对应 AudioStream 派生类 |
-| 自包含 `.tres` / `.res` | Godot 原生 Resource |
-| 自包含 `.tscn` / `.scn` | PackedScene |
-
-URL 路径需要有可识别扩展名，支持查询参数，例如 `image.png?version=2`。资源先由 DownloadCenter 下载到完整缓存文件，再由对应解析器加载；原始图片与音频使用运行时解码，不依赖编辑器导入。
-
-未下载的 HTTP(S) 地址使用同步 `load()` 会返回 `RemoteRequiresAsync`，不会偷偷阻塞网络。磁盘已下载且校验通过的文件可以同步加载。普通资源调用使用 DownloadCenter 默认选项；需要下载级鉴权、预期校验和或不同超时，先直接使用 DownloadCenter，再按其结果本地路径选择原生加载/媒体解码流程。
-
-不要对存在外部依赖的松散场景尝试自动路径拼接。原生远程文件检测到外部依赖时返回 `RemoteDependencies`，应使用下一节的资源包方式。
-
+下载包含共享依赖并去重，沿用 DownloadCenter 的重试、Range 续传和 SHA256 校验。下载操作支持取消与字节进度；取消一个逻辑操作不会终止其他使用者共享的下载。缓存不会自动进行磁盘 LRU 回收，清理会拒绝已经挂载的包。
 
 <a id="resource-1-6"></a>
-### 6. 带依赖的远程场景：PCK / ZIP
+### 构建、增量与远程发布
 
-使用 Godot 导出包含场景及其依赖的资源包，并将资源放在独立且带版本的命名空间，例如 `res://dlc/chapter1_v1/`。
+每组生成一个 Godot PCK，共同依赖自动生成共享包；包级循环合并，并显示在分析报告中。启动场景及其依赖、脚本和原生扩展固定在应用中；本地资源直接引用远程登记项会阻止构建。
 
-```cpp
-godot::String url = "https://cdn.example.com/chapter1_v1.pck";
-godot::String entry = "res://dlc/chapter1_v1/main.tscn";
+构建协调器使用 Python 标准库，在输出目录的 `.staging` 中复制项目并调用真实 Godot 导出，不改写原项目导出预设。可在项目设置 `meowody/resources/python` 指定 Python 程序。平台预设应配置所需的导入和导出选项；没有同名预设时生成该平台的基础预设。
 
-auto handle = resources->load_pack_async<godot::PackedScene>(url, entry);
+输出的 `<platform>/` 包含 `packs/<sha256>.pck`、`versions/<version>/catalog.json`、`latest.json`、`build_state.json`、`analysis.json`、`report.json` 和 `build.log`。输入指纹包含源文件、导入产物、平台、预设、引擎和构建工具；未变化的包复用，变化的包整包更新。报告包含重建/复用/删除包、地址变更、共享依赖和下载体积。保留 build_state 与原有包文件才能复用构建。
 
-// 使用句柄查询，或从 Center 查询这一个入口：
-auto progress = resources->query_pack(url, entry);
-float percent = progress.progress_percent();
-bool done = progress.finished();
-auto cached = resources->get_cached_pack<godot::PackedScene>(url, entry);
-// resources->cancel_pack(url, entry);
-```
+远程根地址填写平台目录的父 URL。将静态输出上传至 HTTP/CDN：**先上传包与不可变版本目录，最后更新 latest.json**。回滚时恢复旧版本入口；不可变版本目录与包不要覆盖。只部署可信内容来源。首版不接入云服务上传，不构建逐文件补丁链。
 
-多个入口共用同一个下载；文件完成后调用 Godot `load_resource_pack(..., false)` 挂载，再通过原始 `res://` 入口加载。引擎负责解析包内依赖，不需要逐个下载或改写引用。
-
-入口必须是 `res://` 路径，URL 扩展名必须是 `.pck` 或 `.zip`。ZIP 同样需要正确的 Godot 路径与已导入资源，不能把任意源文件目录压缩后当成导出包。
-
-挂载不覆盖已有路径，所以不同包必须使用独立命名空间。只加载可信来源的 Godot 资源包，包内可能包含脚本。Godot 没有相应的运行时卸载包 API；LRU 淘汰和组释放只释放资源引用，**不卸载已挂载的资源包**。更新包使用新的 URL 和命名空间，不在原位置覆盖已挂载文件。
-
+构建成功后，本地包及内置目录安装到项目的 `resources/`；正式应用导出排除已经分包的源资源，加入内置目录与本地包。每个平台构建后立即导出对应应用，不能将 Windows 的目录用于 Android/iOS。
 
 <a id="resource-1-7"></a>
-### 7. 批量、分组和场景切换
+### 分组和标签
 
 ```cpp
-auto batch = resources->preload_group("level", {
-    "res://scenes/player.tscn",
-    "https://cdn.example.com/v1/portrait.png"
-});
-
-auto pack_batch = resources->preload_pack_group("chapter", url, {
-    "res://dlc/chapter1_v1/main.tscn",
-    "res://dlc/chapter1_v1/config.tres"
-});
-
-float percent = batch.progress_percent();
-bool done = batch.is_finished();
-auto total = batch.size();
-auto completed = batch.completed_count();
-auto successes = batch.succeeded_count();
-auto results = batch.results();
-auto group_progress = resources->query_group("level");
+auto group = resources->preload_group("Level1");
+auto tagged = resources->preload_label("startup");
+resources->release_group("Level1");
+resources->release_group("label:startup");
 ```
 
-结果保持输入顺序，重复路径共享加载；进度按输入项等权平均。单项失败继续加载其他项，全部结束后整体失败，成功项可用。空批次在更新时成功。
-
-同名组追加合并，同一资源可属于多个组；成功项逐帧加入组。`query_group()` 查询最近一次提交到该组的批次，不是历次批次的合计。
-
-```cpp
-bool exists = resources->has_group("level");
-auto retained_count = resources->group_size("level"); // 去重后的成功资源数
-resources->release_group("level");
-// 或释放所有组和 LRU：
-resources->clear_cache();
-```
-
-释放组同时取消其未完成批次，旧任务不会重新填充同名新组。仅调用 `batch.cancel()` 则保留此前已加入组的成功项。组释放不影响其他组、业务 Ref 或句柄结果。
-
+配置分组用于组织和打包，预加载组用于持有资源。标签预加载使用 `label:` 前缀的持有组。同名预加载组追加合并；释放组取消该组未完成的批次并移除其资源引用，批次结果和其他业务 Ref 可能继续持有资源。
 
 <a id="resource-1-8"></a>
-### 8. LRU 与资源内存
+### 内存和版本边界
 
-```cpp
-resources->set_lru_capacity(128); // 默认；按非分组资源条目数计
-auto capacity = resources->lru_capacity();
-auto current = resources->lru_size();
-auto evictions = resources->lru_evictions();
+默认不再使用 LRU 强引用常驻，句柄与预加载组持有资源。需要显式启用旧式常驻缓存时可调用 `set_lru_capacity(n)`；clear_cache 只释放中心缓存和组引用，不撤销业务持有的资源。
 
-bool cached = resources->has_cached(path);
-auto resource = resources->get_cached<>(path);
-bool evicted = resources->evict_cached(path); // 分组持有时返回 false
-resources->clear_lru();
-// resources->set_lru_capacity(0); // 恢复普通请求完成后中心不常驻的旧行为
-```
-
-普通成功加载进入 LRU，读取缓存会刷新最近使用顺序；超过容量时移除最久未使用的中心引用。组持有的资源不计入 LRU，也不被其淘汰；从组释放不会重新塞回 LRU。
-
-LRU 是引用数量限制，不是精确内存字节预算。业务 Ref、完成句柄、批次结果、Godot 依赖图都可能继续持有资源。需要释放内存时还要释放这些引用。
-
-资源内存缓存与下载文件缓存分开：`clear_cache()` 不删除下载文件；删除下载文件请使用 `meowody::App::download->remove_cached(url)`。
-
+资源包只能挂载，不能卸载。目录固定后按依赖顺序挂载，同路径使用本次版本；禁止在业务加载后切换目录。启动场景不能预先加载可更新资源。远程失败优先回退已验证的本地目录，其次内置目录；必需内容缺失时停止启动。挂载失败返回 RestartRequired，需要重启，不能在半挂载状态继续混用版本。代码或内容契约发生不兼容变化时应更新 compatibility 并重新发布应用。
 
 <a id="resource-1-9"></a>
-### 9. 协程与常用控制 API
+### 接口迁移
 
-```cpp
-#include "runtime/resource/wait_for_resource.h"
-
-auto flow = meowody::Coroutine::make();
-flow << meowody::wait_for_resource(handle) << [handle] {
-    if (!handle.succeeded()) return;
-    // handle.result().resource 可用。
-};
-flow << meowody::wait_for_resources(batch);
-(void)meowody::App::coroutine->start(flow);
-
-// Center 常用状态和控制：
-resources->cancel(path);
-resources->cancel_all();           // 保留已成功的缓存，不关闭中心
-auto pending = resources->pending_count();
-bool idle = resources->is_idle();
-bool closed = resources->is_closed();
-```
-
-等待器至少跳过首帧，失败或取消也结束等待。`pending_count()` 统计未完成的逻辑资源请求；`is_idle()` 还考虑正在回收的底层任务和未派发队列，因此取消全部后不保证立即 idle。
-
-Runtime 会负责关闭。独立实例可调用幂等的 `shutdown()`；本地已提交的 Godot 加载必须配对回收，因此关闭可能等待。不要在该 Center 的更新回调中销毁它；允许调用 `shutdown()`。捕获对象生命周期、Ref 的释放必须早于引擎销毁。
-
+旧路径、UID、URL 及 load_pack_async/preload_pack_group/query_pack/cancel_pack 接口退出业务入口。将资源登记为地址后使用 load/load_async；下载 URL 与资源包入口统一来自目录。SceneCenter.switch_to、UICenter.configure/open/open_async 同样接受地址；UIOptions 不再包含 pack_url。场景、UI、池分别保留其使用中的资源引用。
 
 <a id="resource-1-10"></a>
-### 10. 验证
+### 验证
 
-本地资源、LRU 和 API 回归场景：
+```powershell
+python tests/run_resources_test.py --godot <Godot-console.exe>
+```
 
-[当前验证入口](#verification)。历史测试工程路径不随本仓库提供。
-
-网络、音频、图片、资源包依赖和跨进程续传测试见 DownloadCenter 教程。项目现有 `TestNode::Core` 属性注册错误会输出日志，与这两个模块的测试断言无关；缺失资源的测试也会产生预期引擎错误。
-
+隔离测试使用 `tests/godot_test_workspace.py` 创建统一工作区，包含原生 C++ 探针、真实编辑器和回环 HTTP 服务。覆盖源资源模式、共享依赖、PCK 导出、未变复用、增量升级、请求取消、类型检查、句柄释放、损坏版本入口与离线回退。Android 与 iOS 的设备运行需分别在对应工具链和设备上验证，不能以 Windows 的通过结果替代。
 
 <a id="save"></a>
 ## SaveCenter：存档、资源导出与加密
@@ -3765,7 +3667,7 @@ if (bullet) {
 ### 3. 场景池和自定义工厂
 
 ```cpp
-auto loaded = meowody::App::resource->load<PackedScene>("res://bullet.tscn");
+auto loaded = meowody::App::resource->load<PackedScene>("bullet");
 if (loaded) {
     meowody::App::pool->create_scene<Bullet>("scene_bullets", loaded.resource);
 }
@@ -3961,7 +3863,7 @@ audio->set_muted("SFX", true);
 audio->set_paused("Music", true);
 audio->set_paused("Music", false);
 
-auto sound = meowody::App::resource->load<godot::AudioStream>("res://audio/click.ogg");
+auto sound = meowody::App::resource->load<godot::AudioStream>("audio/click");
 if (sound) {
     auto voice = audio->play("UI", sound.resource, {}, [] {
         // 自然播放完毕时，在 update 中执行一次。
@@ -4084,7 +3986,7 @@ HTTPS 使用 Godot 默认 TLS 证书验证。2xx 是成功；其他状态为 HTT
 ### 模块说明
 
 
-`meowody::App::scene` 使用 ResourceCenter 加载 PackedScene，提供异步切换、PCK/ZIP 包场景、进度和淡出／淡入。接口与状态分在 `scene_center`、`scene_types`。
+`meowody::App::scene` 使用 ResourceCenter 加载 PackedScene，提供按地址异步切换、资源包场景、进度和淡出／淡入。接口与状态分在 `scene_center`、`scene_types`。
 
 见 [TUTORIAL.md](#scene)。场景测试通过根部常驻测试节点跨场景验证。
 
@@ -4097,7 +3999,7 @@ using namespace meowody;
 SceneOptions options;
 options.fade_out_seconds = 0.3;
 options.fade_in_seconds = 0.3;
-auto transition = meowody::App::scene->switch_to("res://scenes/game.tscn", options,
+auto transition = meowody::App::scene->switch_to("scenes/game", options,
     [](const SceneResult& result) {
         if (result.succeeded) {
             // 新场景已进入 SceneTree，淡入完成；scene_id 是 Godot ObjectID。
@@ -4108,9 +4010,8 @@ auto transition = meowody::App::scene->switch_to("res://scenes/game.tscn", optio
 流程：旧场景保持运行 → ResourceCenter 异步加载 → 黑色遮罩淡出 → 下一次更新实例化并提交场景 → 等新场景进入 SceneTree → 淡入 → 完成回调。失败的资源加载保留旧场景；提交前取消同样保留旧场景。
 
 ```cpp
-auto transition = meowody::App::scene->switch_pack(
-    "https://your-cdn.example/levels-v2.pck", "res://levels/v2/game.tscn");
-// ZIP 资源包也支持，沿用 ResourceCenter 的资源包依赖约定。
+auto transition = meowody::App::scene->switch_to("levels/game");
+// 本地与远程包由地址目录解析。
 
 double percent = transition.progress_percent();
 bool done = transition.is_finished();
@@ -4119,7 +4020,7 @@ bool cancelled = transition.cancel(); // 仅提交前有效；提交后返回 fa
 
 状态为 Loading／FadingOut／Switching／FadingIn／Succeeded／Failed／Cancelled。进度前 80% 是资源加载，中间 10% 淡出，最后 10% 淡入；并非剩余时间估计。同步重复切换返回 Failed（Busy），不会隐式中断原有过渡。普通失败回调会交付，主动取消抑制回调。回调中新建切换下一次 update 推进。
 
-current_scene() 查询当前节点；current_transition() 查询进行中的句柄；is_switching() 查询是否繁忙；reload() 按当前场景文件路径重新加载。代码生成且没有文件路径的场景不能通过 reload 恢复，请显式 switch_to。场景节点销毁后不得继续使用旧原始指针。
+current_scene() 查询当前节点；current_transition() 查询进行中的句柄；is_switching() 查询是否繁忙；reload() 按最近一次成功切换的地址重新加载；首次由引擎打开的启动场景应显式 switch_to。场景节点销毁后不得继续使用旧原始指针。
 
 遮罩是根部 CanvasLayer（layer=1024），淡出／淡入时拦截鼠标，空闲隐藏。键盘等业务输入仍应由业务根据 is_switching() 决定是否处理。可将两个淡入淡出时长设为 0。切换时不要同时从其他地方调用 SceneTree 切场景 API。
 
@@ -4397,12 +4298,12 @@ meowody::UIOptions options;
 options.kind = meowody::UIKind::Window;
 options.cache = true;
 const bool configured = meowody::App::ui->configure(
-    SettingsPanelView::SCENE_PATH, options,
+    "ui/settings", options,
     [settings]() -> std::unique_ptr<meowody::UIPresenter> {
         return std::make_unique<SettingsPresenter>(settings);
     });
 if (configured) {
-    auto panel = meowody::App::ui->open(SettingsPanelView::SCENE_PATH);
+    auto panel = meowody::App::ui->open("ui/settings");
     // panel.is_open() / panel.status() / panel.error() 按业务处理。
 }
 ```
@@ -4750,7 +4651,7 @@ System 无需为每个函数添加 GDMETHOD，通常也不需要继承 Node。�
 
 
 ```cpp
-auto panel = meowody::App::ui->open(TestPanelView::SCENE_PATH);
+auto panel = meowody::App::ui->open("ui/test_panel");
 ```
 
 无需模板注册。场景未加载时同步加载并实例化，进入可选入场动画。异步版本为 `open_async(path, data, callback)`。节点绑定由 Godot 场景序列化负责，不使用 View 包装器、UINode 或 JSON 清单。
@@ -4793,13 +4694,13 @@ auto panel = meowody::App::ui->open(TestPanelView::SCENE_PATH);
 <a id="ui-1-1"></a>
 ### 一行打开
 
-生成器为原生类提供 `SCENE_PATH`，直接调用即可：
+先将面板场景登记为地址 `ui/test_panel`，初始化资源中心后按地址打开：
 
 ```cpp
 #include "runtime/app.h"
 #include "ui/generated/TestPanelView.h" // 先通过绑定插件为示例场景生成此业务类。
 
-auto panel = meowody::App::ui->open(TestPanelView::SCENE_PATH);
+auto panel = meowody::App::ui->open("ui/test_panel");
 ```
 
 `open` 在返回前完成加载和实例化；如果设置了入场动画，返回时通常为 `Entering`，动画结束后为 `Open`。不存在的资源返回 Failed，不抛加载异常。同步打开遇到正在异步加载的同一单实例，会等待资源并同步完成实例化。
@@ -4812,7 +4713,7 @@ auto panel = meowody::App::ui->open(TestPanelView::SCENE_PATH);
 godot::Dictionary data;
 data["name"] = "Settings";
 data["muted"] = true;
-auto panel = meowody::App::ui->open(TestPanelView::SCENE_PATH, data);
+auto panel = meowody::App::ui->open("ui/test_panel", data);
 ```
 
 原生类通过带 `GDMETHOD` 的方法 `on_open(const godot::Variant& data)` 接收数据。示例中的 `TestPanelView.cpp` 直接使用 `m_value` 和 `m_mute_button`。
@@ -4827,7 +4728,7 @@ Variant 可传 Dictionary、Array、字符串或自定义 Godot Resource。Dicti
 
 ```cpp
 auto panel = meowody::App::ui->open_async(
-    TestPanelView::SCENE_PATH, data,
+    "ui/test_panel", data,
     [](const meowody::UIHandle& result) {
         if (result.is_open()) {
             // Root 已实例化，并且入场动画已结束。
@@ -4842,7 +4743,7 @@ panel.cancel(); // 仅取消尚未开始显示的排队/加载请求
 
 异步缓存命中也在更新中交付。取消同一路径的共享单实例会取消该实例的等待者。句柄旧 ID 不会关闭缓存复用后的新实例。
 
-远程资源包可先配置 `UIOptions::pack_url`，把 `path` 设为包内场景路径，再调用 `open_async`。远程包不支持同步打开，需避免主线程同步网络下载。
+在资源编辑器中将面板登记到远程组，业务仍按相同地址调用 open_async；资源中心负责下载依赖和挂载。同步打开要求依赖包已缓存。
 
 
 <a id="ui-1-4"></a>
@@ -4858,7 +4759,7 @@ options.kind = meowody::UIKind::Modal;
 options.animation_player = godot::NodePath("Animations");
 options.enter_animation = "show";
 options.exit_animation = "hide";
-meowody::App::ui->configure(TestPanelView::SCENE_PATH, options);
+meowody::App::ui->configure("ui/test_panel", options);
 ```
 
 未覆盖时使用场景元数据；普通未配置场景默认尝试 `AnimationPlayer` 下的 `ui_enter`／`ui_exit`。可以没有播放器、没有动画、仅入场或仅退场。编辑器中的动画名留空表示不使用该阶段动画。
@@ -6222,10 +6123,12 @@ Pool 仍需检查被外部释放的节点；Tween 的活动快照／属性冲突
 | 场景 | 工具 | 主要检查 |
 | --- | --- | --- |
 | 线程与输入 | tests/async_centers_test.cpp、tests/run_centers_test.py | 并发、取消、关闭、Godot 输入与绑定存档 |
+| 应用生命周期 | tests/run_lifecycle_test.py | 暂停所有权、前后台通知、恢复首帧、保存失败、低内存、HTTP 续传；--visual 验证真实 Windows 最小化／恢复／关闭 |
 | 反射 | tests/test_reflect_codegen.py | 属性类型、访问器、诊断、真实头文件扫描 |
 | 绑定 | tests/run_binding_editor_test.py | 启动状态、树选择、生成构建绑定、失败与重试、UI 生命周期 |
 | 编辑器日志 | 上述工具 --suite debug | 编辑器/游戏日志与后端热重载 |
 | Windows Crash | 上述工具 --suite crash | 隔离进程异常、PDB 栈和报告 |
+| 资源管理 | tests/run_resources_test.py | 地址、编辑器、共享包、增量构建、HTTP 更新与离线回退；--mobile-exports 验证移动平台包，--visual 保存界面截图 |
 | 合图 | tests/run_atlas_editor_test.py | 图片格式、平台压缩、重新导入、资源引用与导出 |
 | MultiPatch | tests/run_multipatch_editor_test.py | 切片布局、编辑保存、合图页面变化、运行时导出 |
 | 14 个节点 | tests/run_common_nodes_test.py | 一万条列表、吸附、输入、Sprite/MultiPatch、GPU 像素、选定资源导出 |

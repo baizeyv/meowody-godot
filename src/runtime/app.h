@@ -1,6 +1,7 @@
 #pragma once
 #include "reflection/reflection.h"
 #include <godot_cpp/classes/node.hpp>
+#include "application_lifecycle.h"
 
 #include "audio/audio_center.h"
 #include "coroutine/coroutine_center.h"
@@ -91,6 +92,12 @@ public:
 	static Proxy<TaskCenter> task;
 	static Proxy<InputCenter> input;
 
+	ApplicationState application_state() const { return lifecycle; }
+	void set_game_paused(bool paused);
+	void request_back();
+	void request_quit();
+	bool quit(bool force = false);
+
 	void _process(double delta) override;
 	void _notification(int what);
 
@@ -104,6 +111,15 @@ private:
 	bool stopping = false;
 	bool late_pending = false;
 	double late_delta = 0.0;
+	ApplicationState lifecycle;
+	bool lifecycle_busy = false, request_busy = false, quit_busy = false, memory_busy = false;
+	bool resume_frame = false, late_game_enabled = true, lifecycle_attached = false;
+	bool original_auto_quit = true, original_back_quit = true;
+	uint64_t background_started = 0;
+	bool lifecycle_available() const;
+	void update_background();
+	void low_memory();
+	SaveStatus flush_lifecycle_save(ApplicationSaveReason reason);
 
 	void startup();
 	void shutdown();

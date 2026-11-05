@@ -3,7 +3,6 @@
 #include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/classes/file_access.hpp>
 #include <godot_cpp/classes/json.hpp>
-#include <godot_cpp/classes/scene_tree.hpp>
 #include <godot_cpp/classes/time.hpp>
 
 #include "debug_center.h"
@@ -119,16 +118,12 @@ namespace meowody
 		});
 		add("pause", "pause", "Pause SceneTree (Runtime continues)",
 			[](const auto&) {
-				auto* t = Object::cast_to<SceneTree>(
-					Engine::get_singleton()->get_main_loop());
-				if (t) t->set_pause(true);
+				App::get_singleton()->set_game_paused(true);
 				return DebugCommandResult::success(
 					"SceneTree paused; Runtime continues");
 			});
 		add("resume", "resume", "Resume SceneTree", [](const auto&) {
-			auto* t = Object::cast_to<SceneTree>(
-				Engine::get_singleton()->get_main_loop());
-			if (t) t->set_pause(false);
+			App::get_singleton()->set_game_paused(false);
 			return DebugCommandResult::success("SceneTree resumed");
 		});
 		add("timescale", "timescale <0..10>", "Set engine time scale",

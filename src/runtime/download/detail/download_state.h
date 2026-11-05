@@ -13,6 +13,7 @@ struct DownloadState
     std::int64_t total = -1;
     int retries = 0;
     bool suppress_callback = false;
+    bool manual_paused = false, lifecycle_paused = false;
     std::vector<Delegate<void(const DownloadResult&)>> callbacks;
 };
 }

@@ -35,6 +35,10 @@ class ProjectCreatorTest(unittest.TestCase):
         (self.source / "src/runtime/cache.obj").touch()
         (self.source / "meow/bin/meowody.gdextension").write_text('compatibility_minimum = "4.1"\nwindows="res://bin/native.dll"\n')
         (self.source / "meow/addons/meowody_binding/plugin.cfg").touch()
+        (self.source / "meow/addons/meowody_resources").mkdir()
+        (self.source / "meow/addons/meowody_resources/plugin.cfg").touch()
+        (self.source / "meow/resources").mkdir()
+        (self.source / "meow/resources/settings.json").write_text('{"schema":1,"entries":[]}', encoding="utf-8")
         self.destination = self.base / "中文 project"
 
     def generate(self):
@@ -43,6 +47,8 @@ class ProjectCreatorTest(unittest.TestCase):
     def test_blank_framework_and_persisted_version(self):
         self.generate()
         self.assertTrue((self.destination / "project/main.tscn").is_file())
+        self.assertEqual(json.loads((self.destination / "project/resources/settings.json").read_text()), {"schema": 1, "entries": []})
+        self.assertIn('res://addons/meowody_resources/plugin.cfg', (self.destination / "project/project.godot").read_text())
         self.assertTrue((self.destination / "src/runtime").is_dir())
         self.assertFalse((self.destination / "src/game").exists())
         self.assertFalse((self.destination / "src/ui/generated/OldView.cpp").exists())

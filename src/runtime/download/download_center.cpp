@@ -46,6 +46,7 @@ DownloadHandle DownloadCenter::download(const godot::String& url, const Download
     task->store.path = m_directory.path_join(identity + godot::String(".") + detail::url_extension(parsed.url));
     m_history.track(identity, state);
     if (callback) state->callbacks.push_back(std::move(callback));
+    if (m_suspended) { state->lifecycle_paused = true; state->status = DownloadStatus::Paused; }
     m_tasks.emplace(identity, std::move(task));
     return DownloadHandle(state);
 }
@@ -69,9 +70,21 @@ bool DownloadCenter::remove_cached(const godot::String& url, const DownloadOptio
     return store.remove();
 }
 void DownloadCenter::set_max_concurrent(std::size_t count) { m_max_concurrent = std::max<std::size_t>(1, count); }
+void DownloadCenter::set_suspended(bool suspended)
+{
+    if (m_closed || m_suspended == suspended) return;
+    m_suspended = suspended;
+    for (const auto& [key, task] : m_tasks) {
+        auto& state = *task->state;
+        if (is_download_finished(state.status)) continue;
+        state.lifecycle_paused = suspended;
+        task->close(); // Suspension may be the last opportunity to close files and sockets.
+        state.status = suspended || state.manual_paused ? DownloadStatus::Paused : DownloadStatus::Queued;
+    }
+}
 void DownloadCenter::update()
 {
-    if (m_closed || m_updating || is_idle()) return;
+    if (m_closed || m_updating || m_suspended || is_idle()) return;
     m_updating = true;
     struct Guard { bool& value; ~Guard() { value = false; } } guard{m_updating};
     std::vector<std::shared_ptr<detail::DownloadState>> ready;
@@ -97,9 +110,14 @@ void DownloadCenter::update()
     m_history.refresh();
     for (const auto& state : ready)
     {
+        if (m_suspended) { m_immediate.push_back(state); continue; }
         auto callbacks = std::move(state->callbacks);
         for (auto& callback : callbacks)
-            if (!m_closed && !state->suppress_callback && callback) callback(state->result);
+            if (!m_closed && !state->suppress_callback && callback) {
+                if (m_suspended) state->callbacks.push_back(std::move(callback));
+                else callback(state->result);
+            }
+        if (!state->callbacks.empty() && !m_closed) m_immediate.push_back(state);
     }
 }
 void DownloadCenter::shutdown()

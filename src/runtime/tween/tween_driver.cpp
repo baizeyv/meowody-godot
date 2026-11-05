@@ -51,6 +51,9 @@ namespace meowody::tween::detail
 				double delta =
 					time >= s->driver_last ? time - s->driver_last : time;
 				s->driver_last = time;
+				auto core = s->core.lock();
+				if (!core || core->suspended) return;
+				if (s->skip_driver_tick) { s->skip_driver_tick = false; return; }
 				advance_timeline(s, delta);
 			}
 		};
@@ -87,5 +90,6 @@ namespace meowody::tween::detail
 			->tween_method(godot::Callable(memnew(ClockCall(s))), 0.0, 1.0, 1.0)
 			->set_trans(godot::Tween::TRANS_LINEAR);
 		s->driver->set_loops();
+		if (auto core = s->core.lock(); core && core->suspended) s->driver->pause();
 	}
 }  // namespace meowody::tween::detail

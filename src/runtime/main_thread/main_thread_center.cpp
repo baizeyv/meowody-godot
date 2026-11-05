@@ -31,7 +31,7 @@ DispatchHandle MainThreadCenter::post(Delegate<void()> callback) {
 	return DispatchHandle(state);
 }
 size_t MainThreadCenter::update(size_t max_callbacks, double max_milliseconds) {
-	if (!is_main_thread() || updating || !std::isfinite(max_milliseconds) || max_milliseconds < 0) return 0;
+	if (!is_main_thread() || updating || suspended || !std::isfinite(max_milliseconds) || max_milliseconds < 0) return 0;
 	updating = true;
 	struct Guard { bool &value; ~Guard() { value = false; } } guard{updating};
 	size_t count;
@@ -40,6 +40,7 @@ size_t MainThreadCenter::update(size_t max_callbacks, double max_milliseconds) {
 	auto start = std::chrono::steady_clock::now();
 	size_t executed = 0;
 	for (size_t i = 0; i < count; ++i) {
+		if (suspended) break;
 		if (max_milliseconds > 0 && std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count() >= max_milliseconds) break;
 		Entry entry;
 		{

@@ -12,7 +12,6 @@ public:
     SceneCenter(const SceneCenter&) = delete;
     SceneCenter& operator=(const SceneCenter&) = delete;
     SceneHandle switch_to(const godot::String& path, SceneOptions options = {}, Delegate<void(const SceneResult&)> callback = {});
-    SceneHandle switch_pack(const godot::String& url, const godot::String& entry, SceneOptions options = {}, Delegate<void(const SceneResult&)> callback = {});
     SceneHandle reload(SceneOptions options = {}, Delegate<void(const SceneResult&)> callback = {});
     godot::Node* current_scene() const;
     bool is_switching() const { return m_job && !m_job->handle.is_finished(); }
@@ -22,7 +21,9 @@ public:
     void shutdown();
     bool is_closed() const { return m_closed; }
 private:
-    struct Job { SceneHandle handle; LoadHandle<godot::PackedScene> load; SceneOptions options; Delegate<void(const SceneResult&)> callback; double elapsed = 0; uint64_t next_scene = 0; };
+    struct Job { godot::String address; SceneHandle handle; LoadHandle<godot::PackedScene> load; SceneOptions options; Delegate<void(const SceneResult&)> callback; double elapsed = 0; uint64_t next_scene = 0; };
+    godot::String m_current_address;
+    LoadHandle<godot::PackedScene> m_current_resource;
     EventCenter notifications;
     ResourceCenter& m_resources;
     std::shared_ptr<Job> m_job;

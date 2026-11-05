@@ -42,12 +42,12 @@ namespace meowody
 	}
 	void TweenCenter::update()
 	{
-		if (core->stopped || core->updating) return;
+		if (core->stopped || core->updating || core->suspended) return;
 		core->updating = true;
 		auto snapshot  = core->active;
 		for (auto& s : snapshot)
 		{
-			if (core->stopped) break;
+			if (core->stopped || core->suspended) break;
 			if (s->nested || s->status == Status::Completed ||
 				s->status == Status::Cancelled || s->status == Status::Failed)
 				continue;
@@ -61,7 +61,7 @@ namespace meowody
 				if (!compile(*s)) continue;
 				s->status = Status::Playing;
 				claim(s);
-				if (s->status == Status::Playing && !core->stopped)
+				if (s->status == Status::Playing && !core->stopped && !core->suspended)
 				{
 					driver_start(s);
 					if (s->length == 0) advance_timeline(s, 0);
@@ -93,6 +93,19 @@ namespace meowody
 		core->active.clear();
 	}
 	bool TweenCenter::is_closed() const { return core->stopped; }
+	bool TweenCenter::is_suspended() const { return core->suspended; }
+	void TweenCenter::set_suspended(bool suspended) {
+		if (core->stopped || core->suspended == suspended) return;
+		core->suspended = suspended;
+		for (auto& state : core->active) {
+			if (state->driver.is_null()) continue;
+			if (suspended) state->driver->pause();
+			else if (state->status == Status::Playing) {
+				state->skip_driver_tick = true;
+				state->driver->play();
+			}
+		}
+	}
 	std::vector<TweenHandle> TweenCenter::find(godot::Object* obj) const
 	{
 		std::vector<TweenHandle> out;

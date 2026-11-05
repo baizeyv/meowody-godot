@@ -13,6 +13,9 @@
 *.dylib
 *.framework
 /build/
+/meow/resources/catalog.json
+/meow/resources/export_state.json
+/meow/resources/packs/
 
 # Official dependency checkout; keep the Git submodule record
 /godot-cpp/
@@ -26,7 +29,7 @@ __pycache__/
 .import/
 
 # Test workspace
-/tests/workspace/
+/tests
 
 # Node dependencies and MCP build output
 node_modules/

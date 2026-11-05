@@ -15,6 +15,7 @@ class UICenter {
         godot::Variant data;
         std::shared_ptr<UIPresenter> presenter;
         LoadHandle<godot::PackedScene> load;
+        godot::Ref<godot::PackedScene> resource;
         std::vector<UIOpenCallback> callbacks;
         uint64_t layer = 0, order = 0, focus = 0, animation = 0;
         godot::StringName playing;
@@ -23,7 +24,7 @@ class UICenter {
         double elapsed = 0;
         bool asynchronous = false, data_pending = false, attached = false;
     };
-    struct Cached { godot::String path; uint64_t root; };
+    struct Cached { godot::String path; uint64_t root; godot::Ref<godot::PackedScene> resource; };
     ResourceCenter& resources;
     std::map<godot::String,std::shared_ptr<Config>> configs;
     std::vector<std::shared_ptr<Instance>> instances, retired;
@@ -32,6 +33,7 @@ class UICenter {
     uint64_t next_id=1, next_order=1, restore_focus=0;
     size_t capacity=16;
     bool stopped=false, busy=false;
+    bool suspended=false;
     godot::String normalize(const godot::String&) const;
     UIHandle request(const godot::String&, const godot::Variant&, bool, UIOpenCallback);
     void start(Instance&);
@@ -65,6 +67,7 @@ public:
     size_t cache_size() const { return cache.size(); }
     void set_cache_capacity(size_t value) { capacity=value; evict(); }
     void clear_cache();
+    void set_suspended(bool value);
     void update(double delta=0.0);
     void shutdown();
     bool is_closed() const { return stopped; }

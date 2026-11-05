@@ -14,7 +14,6 @@ struct UIOptions {
     godot::NodePath animation_player;
     godot::StringName enter_animation, exit_animation;
     double animation_timeout = 30.0;
-    godot::String pack_url;
 };
 namespace detail {
 struct UIState {

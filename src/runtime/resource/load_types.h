@@ -7,7 +7,8 @@ namespace meowody
 {
 enum class LoadStatus { Pending, Loading, Succeeded, Failed, Cancelled, Downloading };
 enum class LoadError { None, InvalidPath, RequestFailed, LoadFailed, TypeMismatch, Cancelled, Closed, InvalidHandle,
-                       DownloadFailed, RemoteRequiresAsync, UnsupportedRemoteFormat, RemoteDependencies, PackMountFailed };
+                       DownloadFailed, RemoteRequiresAsync, UnsupportedRemoteFormat, RemoteDependencies, PackMountFailed,
+                       NotInitialized, UnknownAddress, InvalidCatalog, IncompatibleContent, RestartRequired, Released };
 
 inline bool is_load_finished(LoadStatus status)
 {

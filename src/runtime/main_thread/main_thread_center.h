@@ -35,6 +35,7 @@ class MainThreadCenter {
 	std::deque<Entry> queue;
 	bool closed = false;
 	bool updating = false;
+	bool suspended = false;
 public:
 	explicit MainThreadCenter(size_t queue_capacity = 4096) : capacity(queue_capacity) {}
 	~MainThreadCenter();
@@ -42,6 +43,7 @@ public:
 	MainThreadCenter &operator=(const MainThreadCenter &) = delete;
 	DispatchHandle post(Delegate<void()> callback);
 	size_t update(size_t max_callbacks = 128, double max_milliseconds = 2.0);
+	void set_suspended(bool value) { if (is_main_thread()) suspended = value; }
 	void shutdown();
 	bool is_main_thread() const { return owner == std::this_thread::get_id(); }
 	size_t pending_count() const;

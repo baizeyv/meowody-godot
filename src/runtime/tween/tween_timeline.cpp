@@ -455,6 +455,7 @@ namespace meowody::tween::detail
 						  bool events)
 	{
 		auto& s = *ptr;
+		if (auto core = s.core.lock(); !core || core->suspended) return;
 		if (s.busy || s.status != Status::Playing || !std::isfinite(delta) ||
 			delta < 0)
 			return;
