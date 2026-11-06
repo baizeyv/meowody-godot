@@ -12,6 +12,7 @@
 *.so
 *.dylib
 *.framework
+~lib*.TMP
 /build/
 /meow/resources/catalog.json
 /meow/resources/export_state.json
@@ -29,7 +30,7 @@ __pycache__/
 .import/
 
 # Test workspace
-/tests
+/tests/workspace/
 
 # Node dependencies and MCP build output
 node_modules/

@@ -1,13 +1,43 @@
 {
-  "schema": 1,
-  "compatibility": "1",
-  "active_profile": "development",
-  "play_mode": "source",
-  "groups": [{"name": "Local", "remote": false, "startup": true}],
-  "entries": [],
-  "profiles": {
-    "development": {"remote_root": "http://127.0.0.1:8080", "output": "../build/resources/development", "presets": {"windows": "Windows Desktop", "android": "Android", "ios": "iOS"}},
-    "testing": {"remote_root": "", "output": "../build/resources/testing", "presets": {"windows": "Windows Desktop", "android": "Android", "ios": "iOS"}},
-    "production": {"remote_root": "", "output": "../build/resources/production", "presets": {"windows": "Windows Desktop", "android": "Android", "ios": "iOS"}}
-  }
+	"active_profile": "development",
+	"compatibility": "1",
+	"entries": [],
+	"groups": [
+		{
+			"name": "Local",
+			"remote": false,
+			"startup": true
+		}
+	],
+	"play_mode": "source",
+	"profiles": {
+		"development": {
+			"output": "../build/resources/development",
+			"presets": {
+				"android": "Android",
+				"ios": "iOS",
+				"windows": "Windows Desktop"
+			},
+			"remote_root": "http://127.0.0.1:8080"
+		},
+		"production": {
+			"output": "../build/resources/production",
+			"presets": {
+				"android": "Android",
+				"ios": "iOS",
+				"windows": "Windows Desktop"
+			},
+			"remote_root": ""
+		},
+		"testing": {
+			"output": "../build/resources/testing",
+			"presets": {
+				"android": "Android",
+				"ios": "iOS",
+				"windows": "Windows Desktop"
+			},
+			"remote_root": ""
+		}
+	},
+	"schema": 1.0
 }

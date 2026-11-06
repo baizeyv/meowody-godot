@@ -11,8 +11,8 @@ import zipfile
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "tools/project_creator"))
-from creator import generate_project, inspect_engine, download_engine, prepare_dependency, run
+sys.path.insert(0, str(ROOT / "meow/project_creator"))
+from creator import generate_project, inspect_engine, download_engine, prepare_dependency, run, discover_engines, local_engine, release_versions
 
 
 class ProjectCreatorTest(unittest.TestCase):
@@ -23,7 +23,7 @@ class ProjectCreatorTest(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.base = Path(self.temporary.name)
         self.source = self.base / "source"
-        for directory in ("src/runtime", "src/editor", "src/log", "src/reflection", "src/game", "src/ui/generated",
+        for directory in ("src/runtime", "src/editor", "src/log", "src/reflection", "src/game", "src/ui/generated", "src/project_creator", "meow/project_creator",
                           "reflect_codegen", "tools/godot_mcp", ".agents/skills/meowody-framework", "meow/addons/meowody_binding", "meow/bin"):
             (self.source / directory).mkdir(parents=True)
         for filename in ("src/register_types.cpp", "src/register_types.h", "src/editor_registration.h", "src/editor_registration_stub.cpp",
@@ -31,6 +31,8 @@ class ProjectCreatorTest(unittest.TestCase):
             (self.source / filename).write_text("meow/", encoding="utf-8")
         (self.source / "framework-dependencies.json").write_text((ROOT / "framework-dependencies.json").read_text(), encoding="utf-8")
         (self.source / "src/game/business.cpp").touch()
+        (self.source / "src/project_creator/project_creator_view.cpp").touch()
+        (self.source / "meow/project_creator/creator.py").touch()
         (self.source / "src/ui/generated/OldView.cpp").touch()
         (self.source / "src/runtime/cache.obj").touch()
         (self.source / "meow/bin/meowody.gdextension").write_text('compatibility_minimum = "4.1"\nwindows="res://bin/native.dll"\n')
@@ -51,6 +53,8 @@ class ProjectCreatorTest(unittest.TestCase):
         self.assertIn('res://addons/meowody_resources/plugin.cfg', (self.destination / "project/project.godot").read_text())
         self.assertTrue((self.destination / "src/runtime").is_dir())
         self.assertFalse((self.destination / "src/game").exists())
+        self.assertFalse((self.destination / "src/project_creator").exists())
+        self.assertFalse((self.destination / "project/project_creator").exists())
         self.assertFalse((self.destination / "src/ui/generated/OldView.cpp").exists())
         self.assertFalse((self.destination / "src/runtime/cache.obj").exists())
         self.assertFalse((self.destination / "meow").exists())
@@ -137,6 +141,54 @@ class ProjectCreatorTest(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "checksum"):
                 download_engine("4.7.2-stable", self.base, log=lambda _: None)
         self.assertFalse((self.base / "engines/4.7.2-stable/ready.json").exists())
+
+    def test_native_helper_protocol_reports_errors_without_touching_destination(self):
+        request, response = self.base / "request.json", self.base / "response.json"
+        request.write_text(json.dumps({"operation": "unknown"}), encoding="utf-8")
+        result = subprocess.run([sys.executable, "-X", "utf8", str(ROOT / "meow/project_creator/creator.py"),
+                                 str(request), str(response)], capture_output=True)
+        self.assertEqual(result.returncode, 1)
+        payload = json.loads(response.read_text(encoding="utf-8"))
+        self.assertFalse(payload["ok"])
+        self.assertIn("Unknown", payload["message"])
+        self.assertFalse(self.destination.exists())
+
+    def test_engine_discovery_filters_architecture_versions_and_duplicates(self):
+        def executable(name, machine=b"\x64\x86"):
+            path = self.base / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"MZ" + bytes(58) + (64).to_bytes(4, "little") + b"PE\0\0" + machine)
+            return path
+        good = executable("Godot official/Godot_v4.7.2-stable_win64.exe")
+        older = executable("Godot_v4.6-stable_win64.exe")
+        executable("Godot_v4.7.2-stable_win64_console.exe")
+        executable("Godot_arm64.exe", b"\x64\xaa")
+        executable("Godot_dev.exe")
+        executable("Godot_hung.exe")
+        executable("Godot_template.exe")
+        executable("Godot_invalid.exe").write_bytes(b"not an executable")
+        def inspect(command, **kwargs):
+            filename = Path(command[0]).stem
+            if "hung" in filename:
+                raise subprocess.TimeoutExpired(command, 5)
+            if command[1] == "--help":
+                return subprocess.CompletedProcess(command, 0, "export template" if "template" in filename else "--editor --dump-extension-api")
+            value = "4.7.2.dev.official.abcdef" if "dev" in filename else "4.6.0.stable.official.abcdef" if "4.6" in filename else "4.7.2.stable.official.abcdef"
+            return subprocess.CompletedProcess(command, 0, value)
+        with patch("creator.subprocess.run", side_effect=inspect), patch("creator.os.get_exec_path", return_value=[]):
+            found = discover_engines(self.base, seeds=[good, str(good).upper()], roots=[self.base], log=lambda _: None)
+            self.assertEqual([item["path"] for item in found], [str(good.resolve()), str(older.resolve())])
+        with self.assertRaises(ValueError):
+            local_engine(self.base / "Godot_arm64.exe")
+
+    def test_online_versions_select_latest_stable_and_exclude_previews(self):
+        latest = {"tag_name": "4.7.2-stable"}
+        releases = [latest, {"tag_name": "4.8-dev1", "prerelease": True}, {"tag_name": "4.6-stable"},
+                    {"tag_name": "4.7.3-stable", "draft": True}, {"tag_name": "3.6-stable"}]
+        responses = [io.BytesIO(json.dumps(value).encode()) for value in (latest, releases)]
+        with patch("creator.urllib.request.urlopen", side_effect=responses) as request:
+            self.assertEqual(release_versions(), ["4.7.2-stable", "4.6-stable"])
+            self.assertTrue(request.call_args_list[0].args[0].full_url.endswith("/releases/latest"))
 
 
 if __name__ == "__main__":

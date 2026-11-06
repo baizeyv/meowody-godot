@@ -77,6 +77,11 @@ def select_sources():
             continue
         if normalized == "src/runtime/debug/debug_disabled.cpp" and not is_release:
             continue
+        if is_release and normalized in (
+            "src/runtime/debug/debug_center.cpp",
+            "src/runtime/debug/debug_commands.cpp",
+        ):
+            continue
         if normalized == "src/log/log_records_stub.cpp":
             continue
         if normalized == "src/log/log_stack.cpp":
@@ -134,6 +139,9 @@ elif "msvc" in env["TOOLS"]:
 
 if not is_release and env["platform"] == "windows":
     env.Append(LIBS=["dbghelp"])
+
+if env["platform"] == "windows" and Path("src/project_creator").is_dir():
+    env.Append(LIBS=["winhttp", "bcrypt"])
 
 # The editor publishes this library only after SCons has exited successfully.
 output_dir = os.environ.get("MEOWODY_BINDING_OUTPUT", project_dir + "/.godot/binding-build") if os.environ.get("MEOWODY_BINDING_BUILD") == "1" else project_dir + "/bin"

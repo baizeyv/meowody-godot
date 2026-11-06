@@ -14,14 +14,14 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 
 [application]
 
-config/name="meow"
-run/main_scene="res://game/yatzy.tscn"
-config/features=PackedStringArray("4.7", "Forward Plus")
+config/name="Meowody Project Creator"
+run/main_scene="res://project_creator/main.tscn"
+config/features=PackedStringArray("4.7", "GL Compatibility")
 
 [display]
 
-window/size/viewport_width=960
-window/size/viewport_height=900
+window/size/viewport_width=1920
+window/size/viewport_height=1080
 window/stretch/mode="canvas_items"
 
 [editor_plugins]
@@ -30,5 +30,6 @@ enabled=PackedStringArray("res://addons/meowody_binding/plugin.cfg", "res://addo
 
 [rendering]
 
+renderer/rendering_method="gl_compatibility"
 textures/vram_compression/import_etc2_astc=true
 textures/lossless_compression/force_png=true

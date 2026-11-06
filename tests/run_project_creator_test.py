@@ -9,7 +9,7 @@ from unittest.mock import patch
 from godot_test_workspace import prepare_workspace
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "tools/project_creator"))
+sys.path.insert(0, str(ROOT / "meow/project_creator"))
 from creator import build_and_verify, copy_source, generate_project, inspect_engine, prepare_dependency, run
 
 

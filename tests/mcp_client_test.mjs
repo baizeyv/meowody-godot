@@ -70,7 +70,7 @@ try {
     assert.equal((await properties('Patch', ['sprite'])).sprite.class_name, 'MultiPatchSprite');
     await call('editor_set_properties', {node_path: 'Patch', properties: {sprite: 'node("Coins")'}}, true);
     await call('set_node_properties', {project_path: project, scene_path: 'scene.tscn', node_path: 'Coins', properties: {value: '0'}}, true);
-    await call('read_scene', {project_path: root, scene_path: 'meow/ttt.tscn'}, true);
+    await call('read_scene', {project_path: root, scene_path: 'meow/project_creator/main.tscn'}, true);
     await call('read_script', {project_path: project, script_path: '../outside.gd'}, true);
     await call('editor_save_scene');
     assert.match(await readFile(path.join(project, 'scene.tscn'), 'utf8'), /1234|2222/);

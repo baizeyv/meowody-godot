@@ -1,0 +1,28 @@
+import os
+from pathlib import Path
+
+root = Path(os.environ["MEOWODY_TEST_ROOT"])
+output = Path(os.environ["MEOWODY_TEST_OUTPUT"])
+env = Environment()
+env.Append(CXXFLAGS=["/std:c++20", "/EHsc", "/MT", "/utf-8", "/Zc:__cplusplus", "/bigobj"])
+env.Append(LINKFLAGS=["/DEBUG:FULL", "/OPT:NOICF"])
+env.Append(CPPDEFINES=["HOT_RELOAD_ENABLED", "DEBUG_ENABLED", "DEBUG_METHODS_ENABLED", "WINDOWS_ENABLED", "TYPED_METHOD_BIND"])
+env.Append(CPPPATH=[str(root / path) for path in ("src", "build/generated", "godot-cpp/include", "godot-cpp/gen/include", "godot-cpp/gdextension")])
+env.Append(LIBS=[str(root / "godot-cpp/bin/libgodot-cpp.windows.template_debug.x86_64.lib"), "dbghelp"])
+# Link the production debug objects, including its real App and generated registrations.
+# The driver builds the framework first; no production entry point or build flag is added.
+excluded = {"src/editor_registration_stub.cpp", "src/log/log_stack.cpp", "src/log/log_records_stub.cpp", "src/runtime/debug/debug_disabled.cpp"}
+objects = []
+for source in sorted((root / "src").rglob("*.cpp")):
+    relative = source.relative_to(root).as_posix()
+    if relative in excluded:
+        continue
+    if "/platform/" in relative and relative != "src/log/platform/log_stack_windows.cpp":
+        continue
+    obj = source.with_name(source.stem + ".windows.template_debug.x86_64.obj")
+    if not obj.is_file():
+        raise RuntimeError("Build the framework first: missing " + str(obj))
+    objects.append(str(obj))
+objects += [str(root / "build/generated" / (name + ".windows.template_debug.x86_64.obj")) for name in ("gd_register.gen", "gdreflect_bindings.gen")]
+probe = env.SharedObject(str(output / "native_build/lifecycle_probe.obj"), str(root / "tests/lifecycle_probe.cpp"))
+Default(env.SharedLibrary(str(output / "lifecycle_test.dll"), objects + [probe]))

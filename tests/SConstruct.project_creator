@@ -1,0 +1,9 @@
+from pathlib import Path
+
+root = Path(Dir('.').abspath)
+output = root / 'build/project-creator/native-tests'
+env = Environment()
+env.Append(CXXFLAGS=['/std:c++20', '/EHsc', '/MT', '/utf-8', '/Zc:__cplusplus'])
+env.Append(LIBS=['winhttp', 'bcrypt'])
+obj = env.Object(str(output / 'creator_backend_test.obj'), str(root / 'tests/project_creator_backend_test.cpp'))
+Default(env.Program(str(output / 'creator_backend_test.exe'), [obj]))

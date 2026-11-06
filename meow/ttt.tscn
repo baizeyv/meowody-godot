@@ -1,13 +1,10 @@
-[gd_scene format=3 uid="uid://d1hrl0i40y1ms"]
+[gd_scene format=3 uid="uid://e0udtv1pn3df"]
 
-[ext_resource type="Texture2D" uid="uid://dxrmmyh528ygu" path="res://new folder/key.png" id="1_sjl4l"]
+[ext_resource type="Texture2D" path="res://new folder/key.png" id="1_sjl4l"]
 
-[node name="Ttt" type="TttView" unique_id=1139164916 node_paths=PackedStringArray("m_aw", "m_ac", "m_color_rect", "m_aw_2")]
-m_aw = NodePath("aw")
-m_ac = NodePath("ac")
-m_color_rect = NodePath("ac/ColorRect")
-m_aw_2 = NodePath("aw2")
-anchors_preset = 15
+[node name="Ttt" type="Control" unique_id=1139164916]
+layout_mode = 3
+anchors_preset = 0
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
@@ -23,7 +20,7 @@ metadata/meowody_ui_animation_player = NodePath("")
 [node name="aw" type="CanvasLayer" parent="." unique_id=389923631]
 metadata/meowody_bind = true
 
-[node name="ac" type="TestNode" parent="." unique_id=231935308]
+[node name="ac" type="Node" parent="." unique_id=231935308]
 metadata/meowody_bind = true
 
 [node name="ColorRect" type="ColorRect" parent="ac" unique_id=970793370]

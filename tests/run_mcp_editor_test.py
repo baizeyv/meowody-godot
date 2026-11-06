@@ -56,7 +56,8 @@ renderer/rendering_method="gl_compatibility"
 [node name="Title" type="Label" parent="."]
 text="MCP regression"
 ''', encoding="utf-8")
-    (scratch / "binding.tscn").write_text('[gd_scene format=3]\n[node name="Binding" type="TttView"]\n', encoding="utf-8")
+    (scratch / "binding.gd").write_text('@tool\nextends Control\n@export var m_color_rect: ColorRect\n', encoding="utf-8")
+    (scratch / "binding.tscn").write_text('[gd_scene load_steps=2 format=3]\n[ext_resource type="Script" path="res://binding.gd" id="1"]\n[node name="Binding" type="Control"]\nscript = ExtResource("1")\n', encoding="utf-8")
     (scratch / "sprite.tres").write_text('[gd_resource type="MultiPatchSprite" format=3]\n[resource]\n', encoding="utf-8")
     env = os.environ.copy()
     for directory in ("profile", "temp"):

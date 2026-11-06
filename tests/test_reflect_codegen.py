@@ -68,7 +68,9 @@ class ReflectTests(unittest.TestCase):
 
     def test_real_headers_dictionary_and_gs(self):
         raw = gen.scan_headers(ROOT / "src", ROOT / "godot-cpp", ROOT / "build", [
-            ROOT / "src/runtime/ui/sprite_atlas.h", ROOT / "src/test_node.h"])
+            ROOT / "src/runtime/ui/sprite_atlas.h"])
+        raw += gen.scan_headers(ROOT, ROOT / "godot-cpp", ROOT / "build", [
+            ROOT / "tests/fixtures/reflection/test_node.h"])
         models = {item["name"]: item for item in gen.build_model(raw)}
         atlas = models["SpriteAtlas"]
         self.assertEqual(atlas["properties"][0]["variant"], "Variant::DICTIONARY")
