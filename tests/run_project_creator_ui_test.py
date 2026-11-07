@@ -26,18 +26,9 @@ compatibility_minimum="4.7"
 [libraries]
 windows="res://bin/libmeowody.windows.template_debug.x86_64.dll"
 ''', encoding="utf-8")
-    (scratch / "project.godot").write_text('''config_version=5
-[application]
-config/name="Creator UI regression"
-run/main_scene="res://project_creator/main.tscn"
-[display]
-window/size/viewport_width=1920
-window/size/viewport_height=1080
-[editor_plugins]
-enabled=PackedStringArray("res://addons/meowody_binding/plugin.cfg", "res://addons/meowody_debug/plugin.cfg", "res://addons/meowody_atlas/plugin.cfg", "res://addons/meowody_multipatch/plugin.cfg", "res://addons/meowody_nodes/plugin.cfg", "res://addons/meowody_resources/plugin.cfg")
-[rendering]
-renderer/rendering_method="gl_compatibility"
-''', encoding="utf-8")
+    config = (root / "meow/project.godot").read_text(encoding="utf-8")
+    config = config.replace('config/name="Meowody Project Creator"', 'config/name="Creator UI regression"')
+    (scratch / "project.godot").write_text(config, encoding="utf-8")
     environment = os.environ.copy()
     for folder, keys in (("profile", ("APPDATA", "LOCALAPPDATA")), ("temp", ("TEMP", "TMP"))):
         directory = scratch / folder
@@ -58,6 +49,10 @@ renderer/rendering_method="gl_compatibility"
     if args.visual:
         shutil.copy2(scratch / "creator-ui.png", log_dir / "creator-ui.png")
         shutil.copy2(scratch / "creator-engines.png", log_dir / "creator-engines.png")
+        shutil.copy2(scratch / "creator-folder-dialog.png", log_dir / "creator-folder-dialog.png")
+        shutil.copy2(scratch / "creator-framework-refs.png", log_dir / "creator-framework-refs.png")
+        for screenshot in scratch.glob("creator-resize-*.png"):
+            shutil.copy2(screenshot, log_dir / screenshot.name)
     print("[CreatorUI] PASS native UI, worker failure recovery, directory protection, preferences and quit guard")
 
 

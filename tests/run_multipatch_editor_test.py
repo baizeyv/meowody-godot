@@ -16,6 +16,9 @@ def main():
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     scratch = prepare_workspace()
+    for fixture in (scratch / "tests").iterdir():
+        if fixture.is_dir() and fixture.name not in {"meowody_atlas", "meowody_multipatch"}:
+            (fixture / ".gdignore").touch()
     for name in ["meowody_atlas", "meowody_multipatch"]:
         shutil.copytree(root / "meow/addons" / name, scratch / "addons" / name)
     (scratch / "bin").mkdir()
@@ -45,7 +48,7 @@ renderer/rendering_method="gl_compatibility"
     (scratch / "temp/.gdignore").touch()
     environment["TEMP"] = environment["TMP"] = str(scratch / "temp")
     print("Scratch project:", scratch, flush=True)
-    command = [str(args.godot.resolve()), "--editor", "--path", str(scratch), "--rendering-method", args.rendering_method]
+    command = [str(args.godot.resolve()), "--verbose", "--editor", "--path", str(scratch), "--rendering-method", args.rendering_method]
     if not args.visual:
         command.append("--headless")
     log_path = scratch / "editor-test.log"
@@ -62,7 +65,7 @@ renderer/rendering_method="gl_compatibility"
     output = log_path.read_text(encoding="utf-8", errors="replace")
     errors = [line for line in output.splitlines() if line.startswith("ERROR:") and "root certificate store" not in line]
     print("\n".join(line for line in output.splitlines() if "[MultiPatchTest]" in line))
-    if returncode or "failures=0" not in output or "SCRIPT ERROR" in output or errors:
+    if returncode or "failures=0" not in output or "SCRIPT ERROR" in output or errors or "ObjectDB instance" in output:
         print(output[-10000:])
         raise SystemExit(1)
     runtime = subprocess.run([str(args.godot.resolve()), "--headless", "--path", str(scratch), "--main-pack", str(scratch / "multipatch.pck"), "--script", "res://tests/meowody_multipatch/runtime_probe.gd"], capture_output=True, text=True, encoding="utf-8", env=environment, timeout=30)

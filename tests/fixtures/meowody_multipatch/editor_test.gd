@@ -3,6 +3,7 @@ extends RefCounted
 
 const Atlas = preload("res://addons/meowody_atlas/ui_sprite_atlas.gd")
 const Builder = preload("res://addons/meowody_atlas/builder.gd")
+const PanelEditor = preload("res://addons/meowody_multipatch/panel.gd")
 var failures := 0
 
 func check(condition: bool, message: String) -> void:
@@ -21,6 +22,10 @@ func find_plugin(node: Node) -> EditorPlugin:
 
 func run(plugin: EditorPlugin) -> void:
 	await plugin.get_tree().create_timer(1.0).timeout
+	var detached_panel := PanelEditor.new()
+	var undo_id := detached_panel.undo.get_instance_id()
+	detached_panel.free()
+	check(not is_instance_id_valid(undo_id), "destroying a panel releases its owned UndoRedo")
 	var atlas_plugin := find_plugin(plugin.get_tree().root)
 	var image := Image.create(40, 40, false, Image.FORMAT_RGBA8)
 	image.fill(Color.RED)

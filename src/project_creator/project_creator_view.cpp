@@ -98,7 +98,7 @@ void ProjectCreatorView::_ready() {
     if (Engine::get_singleton()->is_editor_hint()) return;
     App::debug->set_enabled(false);
     set_anchors_and_offsets_preset(PRESET_FULL_RECT);
-    get_window()->set_min_size(Vector2i(1080, 780));
+    get_window()->set_min_size(Vector2i(900, 640));
     Ref<Theme> theme;
     theme.instantiate();
     theme->set_default_font_size(15);
@@ -106,6 +106,8 @@ void ProjectCreatorView::_ready() {
     for (const char *type : {"Button", "LineEdit", "TextEdit", "CheckBox"}) {
         theme->set_color("font_color", type, INK);
         theme->set_color("font_hover_color", type, INK);
+        theme->set_color("font_pressed_color", type, INK);
+        theme->set_color("font_hover_pressed_color", type, INK);
         theme->set_color("font_focus_color", type, INK);
         theme->set_color("font_disabled_color", type, Color("6c7086"));
     }
@@ -143,10 +145,13 @@ void ProjectCreatorView::_ready() {
     add_child(background);
     background->set_anchors_and_offsets_preset(PRESET_FULL_RECT);
     auto *layout = row(this, 0);
+    layout->set_name("CreatorLayout");
     layout->set_anchors_and_offsets_preset(PRESET_FULL_RECT);
-    auto *sidebar = memnew(PanelContainer);
+    auto *sidebar_panel = memnew(PanelContainer);
+    sidebar = sidebar_panel;
+    sidebar->set_name("Sidebar");
     sidebar->set_custom_minimum_size(Vector2(220, 0));
-    sidebar->add_theme_stylebox_override("panel", box(Color("11111b"), Color("313244"), 0, 22));
+    sidebar_panel->add_theme_stylebox_override("panel", box(Color("11111b"), Color("313244"), 0, 22));
     layout->add_child(sidebar);
     auto *rail = column(sidebar, 16);
     label(rail, "M /", 34, ACCENT);
@@ -167,11 +172,16 @@ void ProjectCreatorView::_ready() {
     label(rail, String::utf8("轻量起步，自由构建。"), 11, MUTED);
 
     auto *scroll = memnew(ScrollContainer);
+    content_scroll = scroll;
+    scroll->set_name("ContentScroll");
+    scroll->set_v_size_flags(SIZE_EXPAND_FILL);
     scroll->set_h_size_flags(SIZE_EXPAND_FILL);
     scroll->set_horizontal_scroll_mode(ScrollContainer::SCROLL_MODE_DISABLED);
     layout->add_child(scroll);
     auto *margin = memnew(MarginContainer);
+    content_margin = margin;
     margin->set_h_size_flags(SIZE_EXPAND_FILL);
+    margin->set_v_size_flags(SIZE_EXPAND_FILL);
     for (const char *side : {"margin_left", "margin_right", "margin_top", "margin_bottom"})
         margin->add_theme_constant_override(side, 28);
     scroll->add_child(margin);
@@ -180,8 +190,9 @@ void ProjectCreatorView::_ready() {
     auto *heading = column(header, 7);
     label(heading, "WORKSPACE / NEW PROJECT", 11, ACCENT);
     label(heading, String::utf8("开启下一个项目"), 30);
-    label(heading, String::utf8("准备好框架与引擎，专注创造你的作品。"), 14, MUTED);
+    label(heading, String::utf8("准备好框架与引擎，专注创造你的作品。"), 14, MUTED)->set_autowrap_mode(TextServer::AUTOWRAP_WORD_SMART);
     auto *badge = memnew(PanelContainer);
+    platform_badge = badge;
     badge->set_v_size_flags(SIZE_SHRINK_BEGIN);
     badge->add_theme_stylebox_override("panel", box(Color("313244"), Color("45475a"), 20, 10));
     header->add_child(badge);
@@ -190,14 +201,45 @@ void ProjectCreatorView::_ready() {
     const auto saved = App::save->load("creator", "settings");
     const auto settings = saved.ok() ? saved.data : Dictionary();
     saved_version = settings.get("version", "");
-    auto *columns = row(body, 20);
+    columns = memnew(BoxContainer);
+    columns->set_name("ContentColumns");
+    columns->set_h_size_flags(SIZE_EXPAND_FILL);
+    columns->set_v_size_flags(SIZE_EXPAND_FILL);
+    columns->add_theme_constant_override("separation", 20);
+    body->add_child(columns);
     auto *form = column(columns, 18);
     auto *project = card(form);
     label(project, String::utf8("01   项目信息"), 18);
     label(project, String::utf8("为新作品命名，选择它的起点。"), 13, MUTED);
-    auto *project_row = row(project);
+    auto *project_row = memnew(BoxContainer);
+    project_fields = project_row;
+    project_row->set_name("ProjectFields");
+    project_row->add_theme_constant_override("separation", 12);
+    project->add_child(project_row);
     name = field(column(project_row, 7), "ProjectName", String::utf8("项目名称"), settings.get("name", "MyGame"));
-    ref = field(column(project_row, 7), "FrameworkRef", String::utf8("框架版本 / 分支"), settings.get("ref", "main"));
+    auto *ref_field = column(project_row, 7);
+    auto *ref_heading = row(ref_field, 8);
+    auto *ref_label = label(ref_heading, String::utf8("框架版本 / 分支"), 13, MUTED);
+    ref_label->set_h_size_flags(SIZE_EXPAND_FILL);
+    auto *refresh_refs = button(ref_heading, String::utf8("刷新"));
+    refresh_refs->set_name("RefreshFrameworkRefs");
+    refresh_refs->add_theme_stylebox_override("normal", box(Color("313244"), Color("45475a"), 6, 2));
+    refresh_refs->add_theme_stylebox_override("hover", box(Color("45475a"), Color("585b70"), 6, 2));
+    refresh_refs->add_theme_stylebox_override("pressed", box(Color("313244"), ACCENT, 6, 2));
+    refresh_refs->add_theme_stylebox_override("disabled", box(Color("181825"), Color("313244"), 6, 2));
+    refresh_refs->set_custom_minimum_size(Vector2(48, 0));
+    refresh_refs->add_theme_font_size_override("font_size", 12);
+    refresh_refs->connect("pressed", Callable(this, "run_operation").bind("refs"));
+    actions.push_back(refresh_refs);
+    ref = memnew(OptionButton);
+    ref->set_name("FrameworkRef");
+    ref->set_fit_to_longest_item(false);
+    ref->set_clip_text(true);
+    ref->set_custom_minimum_size(Vector2(0, 44));
+    String saved_ref = settings.get("ref", "main");
+    ref->add_item(saved_ref);
+    ref->set_item_metadata(0, saved_ref);
+    ref_field->add_child(ref);
     destination = field(project, "Destination", String::utf8("项目位置"), settings.get("destination", ""));
     destination->set_placeholder(String::utf8("选择父目录，或输入一个空目录的路径"));
     auto *directory_row = row(project);
@@ -247,7 +289,7 @@ void ProjectCreatorView::_ready() {
     versions_button->set_name("versions");
     versions_button->connect("pressed", Callable(this, "run_operation").bind("versions"));
     actions.push_back(versions_button);
-    label(engine_card, String::utf8("关闭本地引擎选项，将下载并校验官方稳定版。"), 11, MUTED);
+    label(engine_card, String::utf8("关闭本地引擎选项，将下载并校验官方稳定版。"), 11, MUTED)->set_autowrap_mode(TextServer::AUTOWRAP_WORD_SMART);
     local->connect("toggled", Callable(this, "mode_changed"));
     mode_changed(local->is_pressed());
 
@@ -268,12 +310,14 @@ void ProjectCreatorView::_ready() {
     rebuild->set_name("rebuild");
     rebuild->connect("pressed", Callable(this, "run_operation").bind("rebuild"));
     actions.push_back(rebuild);
-    label(form, String::utf8("创建后自动编译与验证，成功后即可打开项目。"), 12, MUTED);
+    label(form, String::utf8("创建后自动编译与验证，成功后即可打开项目。"), 12, MUTED)->set_autowrap_mode(TextServer::AUTOWRAP_WORD_SMART);
 
-    auto *workbench_panel = memnew(PanelContainer);
+    auto *workbench_card = memnew(PanelContainer);
+    workbench_panel = workbench_card;
+    workbench_panel->set_name("WorkbenchPanel");
     workbench_panel->set_custom_minimum_size(Vector2(460, 0));
     workbench_panel->set_v_size_flags(SIZE_EXPAND_FILL);
-    workbench_panel->add_theme_stylebox_override("panel", box(Color("1e1e2e"), Color("45475a"), 16, 20));
+    workbench_card->add_theme_stylebox_override("panel", box(Color("1e1e2e"), Color("45475a"), 16, 20));
     columns->add_child(workbench_panel);
     auto *workbench = column(workbench_panel, 14);
     label(workbench, String::utf8("构建工作台"), 18);
@@ -292,6 +336,8 @@ void ProjectCreatorView::_ready() {
     log = memnew(TextEdit);
     log->set_name("BuildLog");
     log->set_editable(false);
+    log->set_line_wrapping_mode(TextEdit::LINE_WRAPPING_BOUNDARY);
+    log->set_autowrap_mode(TextServer::AUTOWRAP_WORD_SMART);
     log->set_placeholder(String::utf8("任务日志将在这里显示。\n\n你可以先检查工具链，\n确认一切准备就绪。"));
     log->set_custom_minimum_size(Vector2(0, 260));
     log->set_v_size_flags(SIZE_EXPAND_FILL);
@@ -307,6 +353,7 @@ void ProjectCreatorView::_ready() {
     folder->connect("pressed", Callable(this, "open_folder"));
     actions.push_back(folder);
     open = button(workbench, String::utf8("打开 Godot 项目  ↗"));
+    open->set_name("OpenProject");
     open->set_disabled(true);
     open->connect("pressed", Callable(this, "open_project"));
     auto *footer = row(body);
@@ -315,9 +362,60 @@ void ProjectCreatorView::_ready() {
     footer_spacer->set_h_size_flags(SIZE_EXPAND_FILL);
     footer->add_child(footer_spacer);
     label(footer, String::utf8("独立工程 · 完整源码 · 自由创作"), 11, MUTED);
+    picker_scrim = memnew(ColorRect);
+    picker_scrim->set_name("PickerScrim");
+    picker_scrim->set_color(Color(0.04f, 0.04f, 0.07f, 0.72f));
+    picker_scrim->set_mouse_filter(MOUSE_FILTER_STOP);
+    add_child(picker_scrim);
+    picker_scrim->set_anchors_and_offsets_preset(PRESET_FULL_RECT);
+    picker_scrim->hide();
+    get_window()->set_embedding_subwindows(true);
+    Ref<Theme> dialog_style;
+    dialog_style.instantiate();
+    dialog_style->merge_with(theme);
+    auto border = box(Color("1e1e2e"), Color("585b70"), 16, 20);
+    border->set_shadow_color(Color(0, 0, 0, 0.35f));
+    border->set_shadow_size(20);
+    dialog_style->set_stylebox("panel", "AcceptDialog", border);
+    for (const char *type : {"ItemList", "Tree"}) {
+        dialog_style->set_stylebox("panel", type, box(Color("181825"), Color("45475a"), 10, 10));
+        dialog_style->set_stylebox("selected", type, box(Color("45475a"), ACCENT, 6, 4));
+        dialog_style->set_stylebox("selected_focus", type, box(Color("45475a"), ACCENT, 6, 4));
+        dialog_style->set_color("font_color", type, INK);
+        dialog_style->set_color("font_selected_color", type, INK);
+    }
     picker = memnew(FileDialog);
+    picker->set_name("LocationPicker");
+    picker->set_use_native_dialog(false);
+    picker->set_flag(Window::FLAG_BORDERLESS, true);
+    picker->set_display_mode(FileDialog::DISPLAY_LIST);
     picker->set_access(FileDialog::ACCESS_FILESYSTEM);
+    picker->set_theme(dialog_style);
+    picker->set_title("MEOWODY / PROJECT STUDIO");
     add_child(picker);
+    picker->set_transient(true);
+    picker->set_exclusive(true);
+    auto *dialog_body = picker->get_vbox();
+    dialog_body->add_theme_constant_override("separation", 14);
+    auto *dialog_header = row(dialog_body);
+    dialog_body->move_child(dialog_header, 0);
+    picker_heading = label(dialog_header, String::utf8("选择项目位置"), 24, ACCENT);
+    picker_heading->set_h_size_flags(SIZE_EXPAND_FILL);
+    auto *close_picker = button(dialog_header, String::utf8("×"));
+    close_picker->set_name("CloseLocationPicker");
+    close_picker->set_custom_minimum_size(Vector2(42, 42));
+    close_picker->set_tooltip_text(String::utf8("关闭"));
+    close_picker->connect("pressed", Callable(picker, "hide"));
+    picker_hint = label(dialog_body, String::utf8("选择父目录，将在其中创建项目文件夹。"), 13, MUTED);
+    dialog_body->move_child(picker_hint, 1);
+    picker->get_cancel_button()->set_text(String::utf8("取消"));
+    auto *confirm_picker = picker->get_ok_button();
+    confirm_picker->add_theme_stylebox_override("normal", box(ACCENT, ACCENT));
+    confirm_picker->add_theme_stylebox_override("hover", box(Color("b4befe"), Color("b4befe")));
+    confirm_picker->add_theme_stylebox_override("pressed", box(Color("b4befe"), Color("b4befe")));
+    for (const char *state : {"font_color", "font_hover_color", "font_pressed_color"})
+        confirm_picker->add_theme_color_override(state, Color("1e1e2e"));
+    picker->connect("visibility_changed", Callable(this, "picker_visibility_changed"));
     picker->connect("file_selected", Callable(this, "selected"));
     picker->connect("dir_selected", Callable(this, "selected"));
     quit_connection = App::event->connect<ApplicationRequest>([this](const ApplicationRequest &request) {
@@ -326,6 +424,8 @@ void ProjectCreatorView::_ready() {
             status->set_text(String::utf8("任务正在运行，请等待下载或编译完成后关闭。"));
         }
     });
+    connect("resized", Callable(this, "update_layout"));
+    update_layout();
     call_deferred("run_operation", "discover");
 }
 
@@ -334,7 +434,8 @@ void ProjectCreatorView::set_busy(bool value) {
     progress->set_indeterminate(value);
     status->add_theme_color_override("font_color", value ? Color("f9e2af") : ACCENT);
     for (auto *action : actions) action->set_disabled(value);
-    for (auto *input : {name, destination, ref}) input->set_editable(!value);
+    for (auto *input : {name, destination}) input->set_editable(!value);
+    ref->set_disabled(value);
     engines->set_disabled(value);
     versions->set_disabled(value);
     local->set_disabled(value);
@@ -359,7 +460,33 @@ void ProjectCreatorView::browse(bool choose_engine) {
     picker->clear_filters();
     picker->set_file_mode(choose_engine ? FileDialog::FILE_MODE_OPEN_FILE : FileDialog::FILE_MODE_OPEN_DIR);
     if (choose_engine) picker->add_filter("*.exe", "Godot");
-    picker->popup_centered_ratio(0.75);
+    picker_heading->set_text(choose_engine ? String::utf8("选择 Godot 引擎") : String::utf8("选择项目位置"));
+    picker_hint->set_text(choose_engine ? String::utf8("选择官方稳定版 Windows x64 编辑器，选中后将验证兼容性。") : String::utf8("选择父目录，将在其中创建以项目名称命名的文件夹。"));
+    picker->get_ok_button()->set_text(choose_engine ? String::utf8("使用此引擎") : String::utf8("选择此文件夹"));
+    picker->popup_centered_clamped(Vector2i(940, 660), 0.85);
+}
+
+void ProjectCreatorView::update_layout() {
+    if (!columns) return;
+    float width = get_size().x;
+    bool stacked = width < 1280;
+    sidebar->set_visible(width >= 1500);
+    platform_badge->set_visible(width >= 1100);
+    columns->set_vertical(stacked);
+    project_fields->set_vertical(width < 1040);
+    workbench_panel->set_custom_minimum_size(Vector2(stacked ? 0 : std::clamp(width * 0.28f, 340.f, 460.f), 0));
+    for (const char *side : {"margin_left", "margin_right", "margin_top", "margin_bottom"})
+        content_margin->add_theme_constant_override(side, width < 1280 ? 20 : 28);
+    if (picker && picker->is_visible()) {
+        Vector2i available = get_window()->get_size();
+        picker->set_size(Vector2i(std::min(940, available.x - 40), std::min(660, available.y - 40)));
+        picker->set_position((available - picker->get_size()) / 2);
+    }
+}
+
+void ProjectCreatorView::picker_visibility_changed() {
+    picker_scrim->set_visible(picker->is_visible());
+    if (picker->is_visible()) update_layout();
 }
 
 void ProjectCreatorView::selected(String path) {
@@ -382,7 +509,7 @@ void ProjectCreatorView::selected(String path) {
 
 void ProjectCreatorView::run_operation(String requested) {
     if (busy) return;
-    if (requested != "versions" && requested != "preflight" && requested != "create" && requested != "rebuild" && requested != "discover" && requested != "inspect") return;
+    if (requested != "versions" && requested != "preflight" && requested != "create" && requested != "rebuild" && requested != "discover" && requested != "inspect" && requested != "refs") return;
     if ((requested == "create" || requested == "rebuild") && (destination->get_text().strip_edges().is_empty() ||
             name->get_text().strip_edges().is_empty() || (local->is_pressed() && engine->get_text().strip_edges().is_empty()))) {
         status->set_text(String::utf8("请填写项目名称、目标目录及引擎。"));
@@ -399,7 +526,7 @@ void ProjectCreatorView::run_operation(String requested) {
     Dictionary settings;
     settings["name"] = name->get_text().strip_edges();
     settings["destination"] = destination->get_text().strip_edges();
-    settings["ref"] = ref->get_text().strip_edges();
+    settings["ref"] = ref->get_selected_metadata();
     settings["local"] = local->is_pressed();
     settings["engine"] = engine->get_text().strip_edges();
     settings["version"] = versions->get_selected() >= 0 ? String(versions->get_selected_metadata()) : saved_version;
@@ -415,7 +542,7 @@ void ProjectCreatorView::run_operation(String requested) {
     job.engine = engine->get_text().utf8().get_data();
     job.local = local->is_pressed();
     job.version = String(settings["version"]).utf8().get_data();
-    job.ref = ref->get_text().strip_edges().utf8().get_data();
+    job.ref = String(ref->get_selected_metadata()).utf8().get_data();
     job.destination = destination->get_text().strip_edges().utf8().get_data();
     if (OS::get_singleton()->has_feature("editor")) job.current_engine = OS::get_singleton()->get_executable_path().utf8().get_data();
     if (requested == "rebuild") {
@@ -433,7 +560,7 @@ void ProjectCreatorView::run_operation(String requested) {
     log->clear();
     log_length = -1;
     set_busy(true);
-    status->set_text(requested == "discover" ? String::utf8("正在搜索本地引擎…") : requested == "versions" ? String::utf8("正在查询官方最新稳定版…") : String::utf8("正在执行，请等待…"));
+    status->set_text(requested == "discover" ? String::utf8("正在搜索本地引擎…") : requested == "versions" ? String::utf8("正在查询官方最新稳定版…") : requested == "refs" ? String::utf8("正在查询框架分支与发布标签…") : String::utf8("正在执行，请等待…"));
     start_job(std::move(job));
 }
 
@@ -504,16 +631,41 @@ void ProjectCreatorView::finished(const TaskResult &result) {
             if (tags.empty()) { response["ok"] = false; response["message"] = "Official stable version lookup returned no valid releases."; }
         }
         if (reply->ok && active_job.operation == "prepare") {
+            String path = String::utf8(reply->source.c_str()).path_join("framework-dependencies.json");
+            Variant parsed;
+            if (FileAccess::file_exists(path)) parsed = JSON::parse_string(FileAccess::get_file_as_string(path));
+            Dictionary metadata = parsed.get_type() == Variant::DICTIONARY ? Dictionary(parsed) : Dictionary();
+            Variant record = metadata.get("godot_cpp", Variant());
+            if (record.get_type() != Variant::DICTIONARY) {
+                response["ok"] = false; response["message"] = "Framework revision lacks a valid dependency record.";
+            } else {
+                Dictionary dependency = record;
+                creator::Job resolve = active_job;
+                resolve.operation = "resolve"; resolve.source = reply->source; resolve.commit = reply->commit;
+                resolve.engine = reply->engine.path; resolve.expected_version = reply->engine.version;
+                resolve.framework_pin = String(dependency.get("commit", "")).utf8().get_data();
+                resolve.legacy_dependency_record = !dependency.has("tag") && !dependency.has("api_versions");
+                Variant supported = dependency.get("api_versions", Variant());
+                if (supported.get_type() == Variant::ARRAY && Array(supported).has(String::utf8(reply->engine.api.c_str())))
+                    resolve.cpp_tag = String(dependency.get("tag", "")).utf8().get_data();
+                status->set_text(String::utf8("正在匹配所选引擎的 godot-cpp 版本…"));
+                start_job(std::move(resolve));
+                return;
+            }
+        }
+        if (reply->ok && active_job.operation == "resolve") {
             Dictionary request;
-            request["name"] = name->get_text().strip_edges(); request["source"] = String::utf8(reply->source.c_str());
-            request["destination"] = String::utf8(active_job.destination.c_str()); request["engine_version"] = String::utf8(reply->engine.version.c_str());
-            request["api_version"] = String::utf8(reply->engine.api.c_str()); request["framework_commit"] = String::utf8(reply->commit.c_str());
+            request["name"] = name->get_text().strip_edges(); request["source"] = String::utf8(active_job.source.c_str());
+            request["destination"] = String::utf8(active_job.destination.c_str()); request["engine_version"] = String::utf8(active_job.expected_version.c_str());
+            String api = String::utf8(active_job.expected_version.c_str());
+            api = api.get_slice(".", 0) + String(".") + api.get_slice(".", 1);
+            request["api_version"] = api; request["framework_commit"] = String::utf8(active_job.commit.c_str());
+            request["godot_cpp_commit"] = String::utf8(reply->cpp_commit.c_str()); request["godot_cpp_tag"] = String::utf8(reply->cpp_tag.c_str());
             Dictionary generated = creator::generate_project(request);
             if (bool(generated.get("ok", false))) {
                 creator::Job build = active_job;
-                build.operation = "build"; build.source = reply->source; build.commit = reply->commit;
-                build.engine = reply->engine.path; build.expected_version = reply->engine.version; build.pin = String(generated["pin"]).utf8().get_data();
-                status->set_text(String::utf8("工程已生成，正在准备依赖并编译…"));
+                build.operation = "build"; build.pin = reply->cpp_commit; build.cpp_tag = reply->cpp_tag;
+                status->set_text(String::utf8("工程已生成，正在准备匹配的依赖并编译…"));
                 start_job(std::move(build));
                 return;
             }
@@ -522,6 +674,21 @@ void ProjectCreatorView::finished(const TaskResult &result) {
     }
     bool success = result.ok() && bool(response.get("ok", false));
     if (!success) status->set_text(String::utf8("未完成：") + String(response.get("message", String::utf8(result.message.c_str()))));
+    else if (operation == "refs") {
+        String selected = ref->get_selected_metadata();
+        ref->clear();
+        int selection = 0;
+        for (const auto &item : reply->refs) {
+            String target = String::utf8(item.ref.c_str()), title = String::utf8(item.name.c_str());
+            int index = ref->get_item_count();
+            ref->add_item((item.kind == "branch" ? String::utf8("分支  ·  ") : String::utf8("标签  ·  ")) + title);
+            ref->set_item_metadata(index, target);
+            ref->set_item_tooltip(index, target);
+            if (selected == target || (item.kind == "branch" && selected == title)) selection = index;
+        }
+        ref->select(selection);
+        status->set_text(String::utf8("框架分支与发布标签已更新，请从下拉框选择。"));
+    }
     else if (operation == "versions") {
         Array available = response.get("versions", Array());
         String selected = versions->get_selected() >= 0 ? String(versions->get_selected_metadata()) : String();
@@ -569,7 +736,9 @@ void ProjectCreatorView::finished(const TaskResult &result) {
     }
     if (!success && operation == "inspect") engine->set_text(previous_engine);
     set_busy(false);
-    if (operation == "discover" && !local->is_pressed() && versions->get_item_count() == 0) call_deferred("run_operation", "versions");
+    if (operation == "refs") refs_loaded = true;
+    if (operation == "discover" && !refs_loaded) call_deferred("run_operation", "refs");
+    else if ((operation == "discover" || operation == "refs") && !local->is_pressed() && versions->get_item_count() == 0) call_deferred("run_operation", "versions");
     if (!success) status->add_theme_color_override("font_color", Color("f38ba8"));
 }
 

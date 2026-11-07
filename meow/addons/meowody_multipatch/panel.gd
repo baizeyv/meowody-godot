@@ -27,6 +27,10 @@ var pending_open: Callable
 var discard: ConfirmationDialog
 var save_dialog: EditorFileDialog
 
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_PREDELETE:
+		undo.free()
+
 func _ready() -> void:
 	custom_minimum_size.y = 480 * EditorInterface.get_editor_scale()
 	var toolbar := HBoxContainer.new()

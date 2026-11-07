@@ -91,6 +91,52 @@ bool version(const std::string &text, Engine &engine) {
     engine.api = "4." + match[1].str();
     return true;
 }
+std::vector<FrameworkRef> framework_refs(const std::string &output) {
+    std::vector<FrameworkRef> result;
+    std::set<std::string> seen;
+    std::istringstream input(output);
+    std::string hash, ref;
+    while (input >> hash >> ref) {
+        if (!std::regex_match(hash, std::regex("[0-9a-f]{40}")) || ref.ends_with("^{}") || !seen.insert(ref).second) continue;
+        if (ref.starts_with("refs/heads/")) result.push_back({ref.substr(11), ref, "branch"});
+        else if (ref.starts_with("refs/tags/")) result.push_back({ref.substr(10), ref, "tag"});
+    }
+    std::sort(result.begin(), result.end(), [](const FrameworkRef &a, const FrameworkRef &b) {
+        if (a.kind != b.kind) return a.kind == "branch";
+        if (a.kind == "branch" && (a.name == "main" || b.name == "main")) return a.name == "main" && b.name != "main";
+        return a.kind == "tag" ? a.name > b.name : a.name < b.name;
+    });
+    return result;
+}
+bool choose_dependency(const std::string &refs, const std::string &engine_version, const std::string &api,
+        const std::string &fallback_tag, const std::string &fallback_commit, Reply &reply, bool legacy_record = false) {
+    std::map<std::string, std::string> tags, peeled;
+    std::istringstream input(refs);
+    std::string commit, ref;
+    while (input >> commit >> ref) {
+        if (!ref.starts_with("refs/tags/") || !std::regex_match(commit, std::regex("[0-9a-f]{40}"))) continue;
+        auto tag = ref.substr(10);
+        if (tag.ends_with("^{}")) peeled[tag.substr(0, tag.size() - 3)] = commit;
+        else tags[tag] = commit;
+    }
+    for (const auto &[tag, hash] : peeled) tags[tag] = hash;
+    auto end = engine_version.find(".stable.");
+    if (end == std::string::npos) return false;
+    std::string exact = "godot-" + engine_version.substr(0, end) + "-stable", minor = "godot-" + api + "-stable";
+    for (const auto &candidate : {exact, minor}) if (tags.count(candidate)) {
+        reply.cpp_tag = candidate; reply.cpp_commit = tags[candidate]; return true;
+    }
+    if (!fallback_tag.empty() && tags.count(fallback_tag) && tags[fallback_tag] == fallback_commit) {
+        reply.cpp_tag = fallback_tag; reply.cpp_commit = fallback_commit; return true;
+    }
+    // Earlier framework revisions pinned this release before recording its tag/API range.
+    // Recover only the verified v10.0.0 release and the APIs tested by this creator.
+    if (legacy_record && fallback_tag.empty() && (api == "4.3" || api == "4.4" || api == "4.5" || api == "4.6" || api == "4.7") &&
+            tags.count("10.0.0-stable") && tags["10.0.0-stable"] == fallback_commit) {
+        reply.cpp_tag = "10.0.0-stable"; reply.cpp_commit = fallback_commit; return true;
+    }
+    return false;
+}
 #ifdef _WIN32
 std::wstring wide(const std::string &text) { return fs::u8path(text).wstring(); }
 std::string environment(const wchar_t *key) {
@@ -394,7 +440,8 @@ Reply build(const Job &job, const Log &log) {
     if (!inspect(engine, actual) || actual.version != job.expected_version) return fail("Use the official Godot version recorded when the project was created.");
     if (job.operation == "build") {
         auto gitlink = run({L"git", L"ls-files", L"--stage", L"godot-cpp"}, fs::u8path(job.source), {});
-        if (!gitlink.ok || (gitlink.output.starts_with("160000 ") && !gitlink.output.starts_with("160000 " + job.pin + " "))) return fail("Framework submodule commit differs from framework-dependencies.json.");
+        std::string framework_pin = job.framework_pin.empty() ? job.pin : job.framework_pin;
+        if (!gitlink.ok || (gitlink.output.starts_with("160000 ") && !gitlink.output.starts_with("160000 " + framework_pin + " "))) return fail("Framework submodule commit differs from its dependency record.");
         if (!run({L"git", L"init"}, destination, log).ok) return fail("Cannot initialize the project Git repository.");
         std::string ignored;
         if (!checkout(L"https://github.com/godotengine/godot-cpp.git", job.pin, destination / "godot-cpp", log, ignored)) return fail("Dependency checkout failed; output and logs were retained.");
@@ -462,8 +509,28 @@ Reply execute(const Job &job, const std::string &log_path) {
                 !http(L"https://api.github.com/repos/godotengine/godot-builds/releases?per_page=100", reply.extra, error)) return fail(error);
         reply.ok = true; return reply;
     }
+    if (job.operation == "refs") {
+        auto result = run({L"git", L"ls-remote", L"--heads", L"--tags", L"--refs", L"https://github.com/baizeyv/meowody-godot.git"}, {}, {}, 30000);
+        if (!result.ok) return fail("Cannot query framework branches and tags. Check Git, network and repository access.");
+        Reply reply; reply.refs = framework_refs(result.output);
+        if (reply.refs.empty()) return fail("The framework repository has no available branches or tags.");
+        reply.ok = true; return reply;
+    }
     if (job.operation == "preflight") {
         Reply reply; reply.ok = preflight(reply.message, log); return reply;
+    }
+    if (job.operation == "resolve") {
+        Reply reply;
+        log("Resolving godot-cpp for " + job.expected_version + "; framework pin " + job.framework_pin +
+                (job.legacy_dependency_record ? " (legacy dependency record)\n" : "\n"));
+        auto refs = run({L"git", L"ls-remote", L"--tags", L"https://github.com/godotengine/godot-cpp.git"}, {}, {}, 30000);
+        Engine engine;
+        if (!refs.ok) return fail("Cannot query official godot-cpp releases. Check Git and network access, then retry.");
+        if (!version(job.expected_version, engine)) return fail("Cannot recognize the selected official Godot version: " + job.expected_version);
+        if (!choose_dependency(refs.output, engine.version, engine.api, job.cpp_tag, job.framework_pin, reply, job.legacy_dependency_record))
+            return fail("No verified godot-cpp mapping for Godot " + engine.version + " (API " + engine.api + "). The framework dependency record needs a supported tag/API mapping.");
+        log("Matched Godot " + engine.version + " -> godot-cpp " + reply.cpp_tag + " @ " + reply.cpp_commit + "\n");
+        reply.ok = true; return reply;
     }
     if (job.operation == "prepare") {
         if (!empty_destination(job.destination)) return fail("Destination must be a new or empty directory; nothing will be overwritten.");

@@ -114,11 +114,13 @@ sources += [output for output in generated_outputs if str(output).endswith(".cpp
 env.Depends(handwritten_sources, generated_outputs)
 
 if is_release:
+    # godot-cpp's Wrapped::_postinitialize uses dynamic_cast for native nodes.
+    # Keep RTTI enabled even when framework exceptions are disabled.
     if env.get("disable_exceptions", True):
         if "msvc" in env["TOOLS"]:
-            env.Append(CXXFLAGS=["/GR-", "/EHsc-"])
+            env.Append(CXXFLAGS=["/EHsc-"])
         else:
-            env.Append(CXXFLAGS=["-fno-exceptions", "-fno-rtti"])
+            env.Append(CXXFLAGS=["-fno-exceptions"])
 
     if "msvc" not in env["TOOLS"]:
         env.Append(CCFLAGS=["-ffunction-sections", "-fdata-sections", "-fvisibility=hidden"])

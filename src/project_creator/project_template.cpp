@@ -49,7 +49,7 @@ Dictionary generate_project(const Dictionary &request) {
     Variant item = dependencies.get("godot_cpp", Variant());
     if (item.get_type() != Variant::DICTIONARY) return failure("Framework must pin official godot-cpp.");
     Dictionary dependency = item;
-    String pin = dependency.get("commit", "");
+    String pin = request.get("godot_cpp_commit", dependency.get("commit", ""));
     if (String(dependency.get("url", "")) != "https://github.com/godotengine/godot-cpp.git" || !std::regex_match(bytes(pin), std::regex("[0-9a-f]{40}"))) return failure("Framework must pin an official godot-cpp commit.");
     std::string error;
     for (const auto *directory : {"runtime", "editor", "log", "reflection"})
@@ -64,6 +64,11 @@ Dictionary generate_project(const Dictionary &request) {
         fs::copy_file(source / filename, destination / filename, fs::copy_options::overwrite_existing, ec);
         if (ec) return failure(ec.message());
     }
+    dependency["commit"] = pin;
+    dependency["tag"] = request.get("godot_cpp_tag", dependency.get("tag", ""));
+    Array target_apis; target_apis.push_back(api); dependency["api_versions"] = target_apis;
+    dependencies["godot_cpp"] = dependency;
+    if (!write(destination / "framework-dependencies.json", JSON::stringify(dependencies, "  "), error)) return failure(error);
     fs::create_directories(destination / "src/ui/generated", ec);
     if (ec) return failure(ec.message());
     if (!write(destination / "FRAMEWORK.md", read(source / "README.md").replace("meow/", "project/").replace("--path meow", "--path project"), error)) return failure(error);
@@ -98,6 +103,7 @@ Dictionary generate_project(const Dictionary &request) {
     metadata["project_dir"] = "project"; metadata["api_version"] = api; metadata["custom_api_file"] = "godot-api/extension_api.json";
     metadata["godot_version"] = version; metadata["framework_url"] = "https://github.com/baizeyv/meowody-godot.git";
     metadata["framework_commit"] = commit; metadata["godot_cpp_commit"] = pin;
+    metadata["godot_cpp_tag"] = dependency["tag"];
     if (!write(destination / "meowody-project.json", JSON::stringify(metadata, "  "), error)) return failure(error);
     String instructions = String("# ") + name + String("\n\nOpen project/project.godot. Framework reference: FRAMEWORK.md.\nBuild Debug with `scons`; Release with `scons target=template_release`.\nInstall Git, Python, SCons, matching clang bindings/libclang, MSVC and a Windows SDK.\nAfter cloning, restore dependencies with `git submodule update --init --recursive`.\nCommit .gitmodules, the godot-cpp gitlink and framework-dependencies.json together.\nNo commits or pushes are made automatically.\nMCP server: `cd tools/godot_mcp`, `npm ci --ignore-scripts`, `npm run build`.\nStart with `node tools/godot_mcp/dist/index.js --project ABSOLUTE_PATH/project`.\n");
     if (!write(destination / "README.md", instructions, error)) return failure(error);
