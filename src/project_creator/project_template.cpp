@@ -72,8 +72,6 @@ Dictionary generate_project(const Dictionary &request) {
     fs::create_directories(destination / "src/ui/generated", ec);
     if (ec) return failure(ec.message());
     if (!write(destination / "FRAMEWORK.md", read(source / "README.md").replace("meow/", "project/").replace("--path meow", "--path project"), error)) return failure(error);
-    auto skill = destination / ".agents/skills/meowody-framework/SKILL.md";
-    if (!write(skill, read(skill).replace("meow/", "project/").replace("Root README.md is the single handbook", "FRAMEWORK.md is the framework handbook"), error)) return failure(error);
     auto project = destination / "project";
     if (!copy_source(source / "meow/addons", project / "addons", error)) return failure(error);
     auto settings_path = source / "meow/resources/settings.json";
@@ -106,6 +104,7 @@ Dictionary generate_project(const Dictionary &request) {
     metadata["godot_cpp_tag"] = dependency["tag"];
     if (!write(destination / "meowody-project.json", JSON::stringify(metadata, "  "), error)) return failure(error);
     String instructions = String("# ") + name + String("\n\nOpen project/project.godot. Framework reference: FRAMEWORK.md.\nBuild Debug with `scons`; Release with `scons target=template_release`.\nInstall Git, Python, SCons, matching clang bindings/libclang, MSVC and a Windows SDK.\nAfter cloning, restore dependencies with `git submodule update --init --recursive`.\nCommit .gitmodules, the godot-cpp gitlink and framework-dependencies.json together.\nNo commits or pushes are made automatically.\nMCP server: `cd tools/godot_mcp`, `npm ci --ignore-scripts`, `npm run build`.\nStart with `node tools/godot_mcp/dist/index.js --project ABSOLUTE_PATH/project`.\n");
+    instructions += "\nAI development guide: [.agents/skills/meowody-framework/SKILL.md](.agents/skills/meowody-framework/SKILL.md).\nUse `$meowody-framework` for framework and game development; it detects this project's layout and reads topic references as needed.\nFramework regression tests are not bundled; use this project's own tests.\n";
     if (!write(destination / "README.md", instructions, error)) return failure(error);
     Dictionary result; result["ok"] = true; result["pin"] = pin; return result;
 }

@@ -6173,6 +6173,10 @@ python -X utf8 tests/run_common_nodes_test.py --godot "D:/path/to/Godot.exe" --v
 <a id="project-skill"></a>
 ## 项目 Skill 与文档维护
 
-项目 Skill 保存为 [.agents/skills/meowody-framework/SKILL.md](.agents/skills/meowody-framework/SKILL.md)。在 Codex 项目任务中可显式使用 `$meowody-framework`，例如“使用 $meowody-framework 增加一个与 SpriteAtlas 共存的原生控件”。Skill 提供章节定位、代码约定、资源/热重载边界和适当的验证入口，不复制整份手册。
+项目 Skill 保存为 [.agents/skills/meowody-framework/SKILL.md](.agents/skills/meowody-framework/SKILL.md)。在 Codex 项目任务中可显式使用 `$meowody-framework`，例如“使用 $meowody-framework 增加一个与 SpriteAtlas 共存的原生控件”。入口按需加载中文主题指南，覆盖业务 Model/System/MVP、异步任务、全部 App 服务、原生 UI、资源编辑器、测试隔离、调试、MCP 与导出，并附有可编译的典型示例，不复制整份手册。
+
+创建器原样分发完整 Skill 目录及参考文件；Skill 读取 `meowody-project.json` 和实际布局，在新项目使用 `FRAMEWORK.md`，不依赖框架仓库位置。生成项目默认没有框架测试驱动，指南会先判断文件存在，再选择项目自身验证方式。Skill 不会自动实现尚未支持的 Editor/Debug 游戏/Release 游戏三种构建隔离。
+
+修改指南后运行 `python -X utf8 tests/run_framework_skill_test.py` 校验链接、锚点和源码路径；加 `--godot "D:/path/to/Godot.exe"` 可从文档提取 C++ 示例编译，并验证迁移保护、订阅释放、任务取消和编辑器对象清理。模板分发验证使用 `tests/run_project_creator_test.py`。
 
 维护时先检查实际头文件和运行路径，再更新 README 的对应 API 和示例。新增节点保持一类一对 h/cpp，编辑器界面继续使用 GDScript，shader 保持独立资产。后续教程直接添加到本文，避免重新出现多份互相矛盾的模块说明。

@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import tempfile
 from godot_test_workspace import prepare_workspace
+from framework_skill_checks import validate_skill
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -20,6 +21,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--godot", required=True, type=Path)
     parser.add_argument("--dependency", required=True, type=Path)
+    parser.add_argument("--library", type=Path, help="Use a staged Debug library without replacing the editor's DLL")
     args = parser.parse_args()
     godot, dependency = args.godot.resolve(), args.dependency.resolve()
     version = run([godot, "--version"])
@@ -39,7 +41,8 @@ def main():
         scratch = prepare_workspace()
         shutil.copytree(ROOT / "meow/addons", scratch / "addons", dirs_exist_ok=True)
         (scratch / "bin").mkdir()
-        shutil.copy2(ROOT / "meow/bin/libmeowody.windows.template_debug.x86_64.dll", scratch / "bin")
+        library = args.library.resolve() if args.library else ROOT / "meow/bin/libmeowody.windows.template_debug.x86_64.dll"
+        shutil.copy2(library, scratch / "bin/libmeowody.windows.template_debug.x86_64.dll")
         (scratch / "bin/meowody.gdextension").write_text('[configuration]\nentry_symbol="meowody_library_init"\ncompatibility_minimum="4.7"\n[libraries]\nwindows="res://bin/libmeowody.windows.template_debug.x86_64.dll"\n')
         config = (ROOT / "meow/project.godot").read_text(encoding="utf-8").replace('run/main_scene="res://project_creator/main.tscn"', '')
         (scratch / "project.godot").write_text(config, encoding="utf-8")
@@ -53,6 +56,7 @@ def main():
         if "[CreatorTemplate] failures=0" not in output or "ERROR:" in output:
             raise RuntimeError(output)
         print("[CreatorTemplate] PASS native source generation and overwrite protection", flush=True)
+        validate_skill(generated, expected_source=ROOT)
         scratch = prepare_workspace()
         shutil.rmtree(scratch)
         shutil.copytree(generated, scratch)

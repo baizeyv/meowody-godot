@@ -1,82 +1,40 @@
 ---
 name: meowody-framework
-description: Develop, fix, review, or document the Meowody Godot 4.7 C++ GDExtension framework, its App services, native UI nodes, reflect codegen and GDScript editor plugins. Apply in a Meowody workspace; generic Godot projects use other conventions.
+description: 开发、修复、审查 Meowody Godot C++ 框架及其生成的游戏项目，包括业务系统、原生 UI、资源、编辑器工具、测试与导出。用于包含 SConstruct 和 src/runtime/app.h 的 Meowody 工作区。
 ---
 
-# Meowody framework development
+# Meowody 框架与游戏开发
 
-Locate the requested repository using SConstruct and src/runtime/app.h. Godot root is meow/ in the framework checkout and project/ in creator-generated projects; read meowody-project.json when present. Root README.md is the single handbook. Read relevant chapters and actual headers before editing; a small task does not require loading the whole manual.
+适用于框架仓库，也适用于创建器生成的新项目。先识别当前布局，再按任务读取下面的参考文档；无需一次加载所有模块。
 
-## Reference routing
+## 先确认环境
 
-Use README explicit anchors or rg searches:
+1. 以 `SConstruct`、`src/runtime/app.h` 所在目录作为项目根。存在 `meowody-project.json` 时读取 `project_dir`、`api_version`、`custom_api_file` 及依赖版本；未配置时 Godot 根默认是 `meow/`。不要把根目录与 `res://` 混为一谈。
+2. 手册优先使用根目录 `FRAMEWORK.md`，否则使用 `README.md`；下文“手册 #anchor”指该文件的对应锚点。源码路径以项目根为基准，`addons/` 路径以 Godot 根为基准。
+3. 查看实际源码、构建选项和当前改动后再修改。框架专用的创建器、测试驱动可能未随新项目分发；调用前确认文件存在。不要从本机路径推断工具、引擎或平台已经可用。
 
-| Task | Anchors | Source |
-| --- | --- | --- |
-| Initialization / builds | app, build-options | src/runtime/app.h, app.cpp, SConstruct |
-| Foreground / background / memory / quit | application-lifecycle | src/runtime/application_lifecycle.h, app_lifecycle.cpp, app.cpp |
-| New project creation / engine versions | project-creator | src/project_creator, meow/project_creator, framework-dependencies.json, meowody-project.json, SConstruct |
-| Reflect properties / methods / signals | reflection | src/reflection; reflect_codegen |
-| Main thread / background tasks / input | main-thread, task, input | src/runtime/main_thread, task, input |
-| Events / reactive / coroutine / callbacks | core, event, reactive, coroutine | matching src/runtime directories |
-| Animation / IO / assets / persistence | tween, download, resource, save, pool | matching centers and types |
-| Time / audio / HTTP / scenes / UI | time, audio, net, scene, ui | matching centers and types |
-| MVP / business Systems | mvp, ui | src/runtime/system/system_center.h, src/runtime/ui/ui_presenter.h and ui_center; business examples in README |
-| Generation / scene binding / reload | binding | addons/meowody_binding; src/editor/binding |
-| Atlas / MultiPatch | atlas, multipatch | addons/meowody_atlas and meowody_multipatch; src/runtime/ui |
-| Native controls | nodes, node-examples | src/runtime/ui/nodes; addons/meowody_nodes |
-| Debugging / native crashes | debug | src/log; src/runtime/debug; addons/meowody_debug |
-| Godot MCP / live editor | mcp | meow/addons/meowody_mcp, tools/godot_mcp, tests/run_mcp_editor_test.py |
-| Performance | performance, build-options | tests/*perf*, reflect_codegen; measured runtime hot paths |
-| Validation | verification, troubleshooting | tests drivers and generated fixtures |
+## 按任务读取
 
-The addons paths above are under meow/ on disk.
+| 任务 | 指南 |
+| --- | --- |
+| 初始化、依赖、版本、构建、反射和热重载 | [项目与构建](references/project-build.md) |
+| 原生类、Model、System、MVP、App 生命周期 | [架构与所有权](references/architecture.md) |
+| Event、Reactive、协程、Tween、任务与主线程 | [事件与异步](references/events-async.md) |
+| 输入、存档、资源、场景、网络、下载、音频、时间、池 | [游戏服务](references/game-services.md) |
+| 原生 UI、自适应、列表、绑定、Atlas、MultiPatch | [界面与资源工具](references/ui-assets.md) |
+| C++ 关卡编辑器、编辑器插件、测试代码打包隔离 | [编辑器与构建边界](references/editor-tools.md) |
+| 测试、泄漏、崩溃、性能、MCP、导出与交付 | [验证与交付](references/validation-export.md) |
+| 框架创建器、依赖解析、codegen 与插件维护 | [框架维护](references/framework-maintenance.md) |
+| 可核对的业务、UI、迁移、任务、资源和编辑器示例 | [典型示例](references/examples.md) |
 
-## Framework constraints
+## 始终遵守的约束
 
-- Framework root differs from Godot root: res:// means the configured project_dir (meow/ by default, project/ in generated projects), and C++ include paths start at src/.
-- Use meowody::App::resource->, App::save-> and other current Proxy entries. Proxy only exposes operator->; removed Runtime::resources() interfaces are invalid.
-- Use GDREFLECT_CLASS and GDPROPERTY for ordinary runtime classes. Codegen generates missing accessor declarations, bodies and bindings. Business setters may provide validation, signals and resource notifications: preserve that behavior. Do not add explicit _bind_methods to reflected runtime classes.
-- Put business calls to generated accessors in cpp implementations; codegen disables generated declarations while scanning headers, so inline header calls may fail before those methods exist.
-- Do not edit build/generated. Binding users own h/cpp; the generator owns includes.gen.h and bindings.gen.inc. Each native node has its own h/cpp; shaders are separate gdshader runtime assets.
-- Editor UI is GDScript with short-lived C++ backend calls. Do not hold native backend instances or native Callables across DLL reload. Native scene references are stored by Godot; NativeSceneRegistration and runtime rebinding are obsolete.
-- Native controls must disconnect constructor/resource native Callable connections in their destructors before DLL unload. Use named engine Callables for engine-owned tween callbacks such as queue_free. Binding regression holds LongPress/Repeat/Snap/Loop through three DLL replacements, checks one connection and frees them before exit. An editor already using the old DLL without cleanup must restart once before testing the fix.
-- MVP uses optional non-template UIPresenter factories in UICenter. Model/System are ordinary business types. SystemCenter uses an unordered_map for lookup and a separate reverse registration order. Persisted Models inherit non-template Model and override vector<ModelField> save_fields() using model_field(name, field reference). SaveCenter::save_model/load_model take Model&; shared type overloads and .cpp loops replace per-Model templates; Reactive values are restored with notifications after whole-input type validation. Register Systems once via App::system->register_systems<T...>() or register_system<T>(args...), then explicitly initialize() before opening business UI; get<T>() does not initialize. Optional System base provides initialize()->SystemStatus and shutdown() noexcept; plain classes still register without hooks. Startup failure cleans the failing instance then earlier started instances in reverse order and permits retry. shutdown closes once even with external owners; clear releases registrations and starts a new registration cycle. No registration during lifecycle callbacks or after startup; get works in callbacks. App shuts Systems down after UI and before underlying services; no automatic updates. Presenter tracks UI-owned subscriptions; shared System work can outlive a panel. Factory shared_ptr captures extend System lifetime; preserve explicit scene/game ownership.
-- Model save_version defaults to 0; legacy snapshots without metadata are v0. migrate_save(from, Dictionary&) advances exactly one version on a deep copy; callbacks must only transform that copy. Newer versions are rejected; failures must not be followed by saving defaults. load_model returns ModelLoadResult and never rewrites storage; persist/flush explicitly after successful migrated loads. MODEL_VERSION_KEY is reserved. Dictionary/Resource APIs do not auto-migrate.
-- MainThreadCenter::post and TaskCenter::submit/handles are thread-safe; their update/shutdown/destruction belong to the creating main thread. Workers only use ordinary C++ data; completion captures ObjectID/weak_ptr and checks lifetime. TaskValue is a fixed std::variant (no RTTI), cancellation is cooperative, shutdown joins before releasing Systems, and then MainThread callbacks are discarded. Exception conversion exists only when exceptions are enabled; release jobs return TaskError explicitly. Native/isolated regression: tests/async_centers_test.cpp and tests/run_centers_test.py.
-- InputCenter routes polls through held move-only InputContext tokens. Priority/latest activation wins; exclusive contexts mask lower contexts, additive contexts claim matching actions. Context/focus/binding changes suppress edges for the current process frame. InputMap rebind/import validates first, snapshots plain values via SaveCenter, and does not intercept raw Godot/Control input. All input operations and token disposal stay on main thread.
-- App drives services and deferred tween/coroutine/save phases. Avoid duplicate updates and access during static global construction. Follow each module's cancellation, callback and ownership semantics.
-- App owns runtime lifecycle without another Center. ApplicationState keeps focus, system suspension, minimization and manual game pause separate. Desktop focus loss only suppresses input; actual background/minimize pauses services and game clocks, with a zero-advance resume frame. Ignore the headless display's synthetic minimized mode. Use App::set_game_paused and App::request_back/request_quit/quit, not direct SceneTree quit/pause for lifecycle ownership. ApplicationEvent handlers snapshot Models before synchronous pending-save flush; ApplicationSaveFailed retains pending data, and normal quit fails unless explicitly forced. Audio/tween/download pause layers preserve manual state; download suspension closes files/sockets immediately, including new jobs and deferred callbacks. Low-memory cleanup removes only idle pool/UI/LRU entries. Do not intercept the editor. Native tests/run_lifecycle_test.py --visual validates the real App, loopback HTTP Range resume and identity-checked Windows minimize/close; mobile events are simulated, not device-verified.
-- ResourceCenter uses configured addresses, never raw paths/URLs. App starts initialize(); wait for its ResourceOperation before business loading. Resources editor configuration is res://resources/settings.json. Source mode resolves UIDs; packed mode fixes one compatible platform catalog at startup, downloads verified PCK dependencies and mounts before loading. Do not switch catalogs after resource use or retry a failed mount without restarting. LoadHandle copies share release; independent requests cancel independently. Default LRU capacity is zero; handles, groups and business Refs own resources. SceneCenter/UICenter take addresses; pack_url and switch_pack are removed. Resource editor UI stays in GDScript; isolated builds use native Godot export and Python stdlib. Run tests/run_resources_test.py for editor, build and loopback HTTP regression; never claim Android/iOS device coverage from Windows tests.
-- Runtime atlas assets are native SpriteAtlas atlas.tres; UISpriteAtlas is editor configuration. Preserve stable source references and logical regions/margins during repacks. MultiPatch sidecars reference source textures; avoid competing image importers or unstable packed UVs.
-- Reused list cells replace their complete display state and subscriptions. Loop recentering shifts animation coordinates too. Keep native drag/drop delivery and input cancellation on release, hiding, disabling and focus loss.
-- Binding failures retain a closable progress dialog; full success closes automatically. Keep UI task state outside the unloadable DLL.
+- 调用服务使用 `meowody::App::resource->` 等 Proxy；Proxy 只暴露 `operator->`。不要恢复旧 `Runtime::resources()` 接口，不在静态初始化时访问 App。
+- 原生反射类使用 `GDREFLECT_CLASS`、`GDPROPERTY` 等现有宏；不要手写它们的 `_bind_methods`。不修改 `build/generated` 或绑定生成的 `.gen.*` 文件。
+- Godot 对象和场景树操作留在主线程；后台任务只传普通 C++ 数据。异步回调必须核对所有者仍然存活，取消和销毁需要明确的所有者。
+- 先界定 Node、RefCounted、普通 Object、RAII 连接和任务句柄的所有权。DLL 重载前释放原生回调；运行时判断不能代替编译排除。
+- 只修改任务所需内容，以实际源码为准；遇到手册差异核对后修正文档。示例不是必须套用的架构，简单功能不强制引入 System 或 Presenter。
 
-## Godot MCP
+## 验证与交付习惯
 
-- Local stdio server tools/godot_mcp/dist/index.js is bound by --project to the Godot root (meow/). Build with npm ci --ignore-scripts and npm run build; local .codex/config.toml is machine-specific and ignored. Preserve other MCP servers. Client MCP settings need Restart to load newly configured tools; do not infer an active chat connection from a config file alone.
-- meowody_mcp is a GDScript EditorPlugin, loopback WebSocket on an ephemeral port with a random per-editor token and project identity. Its private endpoint lives under .godot/meowody_mcp and is removed on orderly shutdown. Never print credentials or retain native DLL callbacks/backends. No runtime autoload.
-- Begin with editor_get_status and editor_get_scene_tree. Use live editor tools for open scenes; preserve unsaved edits, current-scene guards, native UndoRedo and ownership. Properties use Godot literals, explicit load("res://...") and node("scene/path") wrappers. New native types still require framework generation/build. Reject edits during Meowody binding work, scene escapes and foreign projects; keep existing/junction path checks.
-- tests/run_mcp_editor_test.py exercises real MCP stdio SDK and an isolated Godot editor with the actual extension. --visual verifies viewport PNG content; headless screenshot errors must return promptly. Only inspect or change the user's live scene when the task authorizes it.
-
-## Performance invariants
-
-- Start with README performance and real before/after probes. Core, Save, Service and Arc benchmarks measure separate workloads; new-count excludes engine allocations and cannot predict total FPS. Keep callback mutation, cancellation and GPU-output checks alongside timing.
-- Event/coroutine registration cutoffs preserve deferred additions and slot reuse without snapshots. Reactive callable addresses stay stable; an executing self-cancelled slot cannot recycle until the outermost invocation returns. The Reactive/Dependency source must survive synchronous notification. The extra registration allocation is an explicit safety tradeoff.
-- SaveCenter public reads deep-copy results. Internal pending partitions may share only private, unmodified slot snapshots; snapshot new caller payloads before staging and preserve byte-limit/checksum/durability checks.
-- Input active contexts stay ordered by priority/latest activation; preserve same-name activations, exclusive/additive masks and same-frame edge suppression. Arc PackedArray pointers are valid only until a resize/COW detach; preserve trimmed/nested atlas clipping and test actual GPU pixels.
-- Reflect scans a single unsaved translation unit with full function bodies and original-header diagnostics; do not disable diagnostics or filter away unmarked dependency headers. Release optimization follows godot-cpp optimize=speed/speed_trace/size rather than overriding all builds with size flags.
-
-## Project creator
-
-Windows x64 creator runs directly in meow/project_creator/main.tscn with the native src/project_creator view. Use App::task for plain-data background work, App::save for preferences and ApplicationRequest for the busy quit guard. Creator operations are native C++ in creator_backend and project_template; there is no creator Python helper, Tkinter or PyInstaller application. WinHTTP/BCrypt and system tar handle downloads; Godot JSON template generation stays on the main thread. Python belongs only to the existing SCons/reflection build toolchain. Use Catppuccin Mocha and an initial 1920x1080 window with stretch disabled so layouts follow real window dimensions. Collapse the sidebar and stack configuration/workbench at narrower widths; keep bottom actions scroll-accessible and clamp open modals during resize. Search and validate local editors into a manually selected dropdown; query official stable releases automatically in download mode. Keep checkbox margins equal in all states to prevent hover text movement. Use an embedded themed modal FileDialog with a dim backdrop and no operating-system title bar. Query framework heads/tags into a selection dropdown, retaining current choices on failed refresh. Wrap workbench output at the panel width and allow vertical scrolling only. It uses the fixed framework Git repository. New projects use project/, include all framework services/plugins and blank scenes, and exclude business examples, TestNode and old artifacts. Resolve official godot-cpp exact/minor Godot release tags first, including peeled annotated commits; use an independent release such as v10 when the framework dependency record approves the selected target API. Legacy commit-only records may recover the known v10.0.0 mapping for tested 4.3-4.7 APIs only after verifying the pinned commit against the official stable tag; never override explicit restrictions or accept unknown commits/APIs. Pin the resolved tag and commit in the generated dependency record and project metadata; validate the source gitlink against its original framework record, not against a different selected target release. The framework checkout itself must also register godot-cpp as a real pinned submodule; do not retain stale branch=4.3 metadata for the independent v10 release. Every generated project initializes its own Git repository and registers godot-cpp as a real pinned submodule with .gitmodules, even when the framework has no gitlink. Registration may force-add the ignored dependency path; do not automatically commit or push. Restore dependencies after cloning with git submodule update --init --recursive. SConstruct reads meowody-project.json for project_dir and the selected engine API; explicit API arguments win. Preserve current meow/ defaults. Engine downloads use official stable tags and SHA512 verification. Never reuse an arbitrary DLL for a different target API. Toolchain checks do not install system dependencies. Creator integration tests reuse the shared tests/workspace/meow workspace as a generated framework root, with its only Godot project in project/. Use tests/SConstruct.project_creator, tests/project_creator_backend_test.cpp, tests/run_project_creator_ui_test.py and tests/run_project_creator_test.py; Godot exports remain under build/project-creator; Windows release output is windows-x64/MeowodyProjectCreator.exe plus its native DLL, with PCK embedded. Validate exports using tests/run_project_creator_export_test.py, including actual startup of both official Debug and Release templates. Keep RTTI enabled for native Godot nodes: godot-cpp Wrapped::_postinitialize uses dynamic_cast even in Release. UI test imports must enable the framework plugins, matching the application. Build addressable resources before exporting even when entries are empty.
-
-## Build and verification
-
-Normal debug builds use scons at repository root without fixed -j 4/-j 8. Redirect logs into the workspace, wait for completion, then read the final useful output. New native registrations may require reopening Godot.
-
-Choose the smallest appropriate README verification entry: reflect tests, binding driver (binding/debug/crash suites), atlas, MultiPatch, or Common Nodes. Use the actual Godot executable. GPU pixel checks require visual mode. Performance drivers and workload limits are documented at README performance; capture original binaries/revisions before rebuilding for comparisons. Keep all test drivers, native tests and GDScript fixtures under tests/. All Godot suites must use tests/godot_test_workspace.py prepare_workspace() and the single tests/workspace/meow project; never create random build test projects. Run suites serially and close previous test editors before resetting. Binding build copies live in tests/workspace; atlas cold-import checks clear caches in the same project. Logs/screenshots survive until the next suite; copy comparison reports elsewhere before resetting. Drivers must preserve the user's open editor; on managed Windows, isolate APPDATA, LOCALAPPDATA and TEMP/TMP.
-
-Intentional CrashHandler tests are only appropriate when crash handling is in scope, and only against the driver's isolated process. Documentation-only edits need link/API/skill validation rather than native rebuilds.
-
-Keep README examples synchronized with API changes and retain stable chapter anchors. If docs conflict with source, inspect source and correct the docs rather than restoring obsolete APIs.
+先选择与改动匹配的最小验证，再按失败证据扩大范围。框架已有测试使用共享隔离工作区并串行执行；新项目先检查自身测试入口。保护用户正在运行的编辑器和未保存场景。区分“编译通过”“编辑器验证”“导出运行”“真机验证”，只报告实际完成的检查。细节见验证指南。
